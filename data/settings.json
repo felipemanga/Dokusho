@@ -1,0 +1,12 @@
+{
+    "main":"data/apps/NovelReader/index.js",
+    "threads": 4,
+    "sdServerEndpoint": "http://192.168.1.5:1234",
+    "sdClipSkip": 2,
+    "sdCfgScale": 7,
+    "imageGenPath":"DCIM/IMGEN",
+    "imageGenPrompt": "masterpiece,best quality,amazing quality,high detail,subtle,high contrast,real background,smooth shading,glossy surfaces,colorful depth,diagonal angle,high angle,masterful shading,low key,ciaroscuro,impasto,(shallow depth of field:1.4),(foreshortening:1.4)",
+    "llmThinkingBudgetTokens": 1000,
+    "llmServerEndpoint": "http://192.168.1.5:8080/v1/chat/completions",
+    "theme":"classic"
+}
