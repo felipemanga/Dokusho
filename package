@@ -1,0 +1,7 @@
+#!/bin/sh
+
+cp DeltaAI.3dsx Dokusho.3dsx
+
+./DeltaAI --main scripts/3dsx-inject.js Dokusho.3dsx --dir data
+
+./DeltaAI --main scripts/3dsx-list.js Dokusho.3dsx
