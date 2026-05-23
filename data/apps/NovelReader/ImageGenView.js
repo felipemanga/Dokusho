@@ -104,7 +104,7 @@ export function createImageGenView(app) {
                 y: 160,
                 width: 170,
                 font: fontSmall,
-                text: nrSettings.imgGenPostfix ?? settings.imageGenPrompt,
+                // text: nrSettings.imgGenPostfix ?? settings.imageGenPrompt,
                 placeholder: 'Prompt...'
             }),
             // Negative prompt
@@ -114,7 +114,7 @@ export function createImageGenView(app) {
                 y: 160,
                 width: 170,
                 font: fontSmall,
-                text: nrSettings.imgGenNegative ?? 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality',
+                // text: nrSettings.imgGenNegative ?? 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality',
                 placeholder: 'Negative prompt...'
             }),
             // Size + steps row
@@ -146,7 +146,7 @@ export function createImageGenView(app) {
                 y: 192,
                 width: 80,
                 font: fontSmall,
-                text: nrSettings.imgGenHeight ?? '1024'
+                // text: nrSettings.imgGenHeight ?? '1024'
             }),
             new Label({
                 text: 'Steps:',
@@ -161,7 +161,7 @@ export function createImageGenView(app) {
                 y: 192,
                 width: 80,
                 font: fontSmall,
-                text: nrSettings.imgGenSteps ?? '30'
+                // text: nrSettings.imgGenSteps ?? '30'
             }),
             // Buttons
             new Button({
@@ -280,6 +280,15 @@ export function updateImgGenModeButtons() {
 }
 
 // Called when entering image gen view to pre-fill prompt from metadata
+export function refreshImageGenView(app) {
+    if (nodeMap.imgGenPromptPostfix) nodeMap.imgGenPromptPostfix.text = nrSettings.imgGenPostfix ?? settings.imageGenPrompt;
+    if (nodeMap.imgGenNegative) nodeMap.imgGenNegative.text = nrSettings.imgGenNegative ?? 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality';
+    if (nodeMap.imgGenWidth) nodeMap.imgGenWidth.text = nrSettings.imgGenWidth ?? '1024';
+    if (nodeMap.imgGenHeight) nodeMap.imgGenHeight.text = nrSettings.imgGenHeight ?? '1024';
+    if (nodeMap.imgGenSteps) nodeMap.imgGenSteps.text = nrSettings.imgGenSteps ?? '30';
+    refreshImgGenPrompt(app).catch(ex => console.error('refreshImgGenPrompt error:', ex));
+}
+
 export async function refreshImgGenPrompt(app) {
     const model = app.model;
     if (!model.currentBook || !nodeMap.imgGenPrompt) return;

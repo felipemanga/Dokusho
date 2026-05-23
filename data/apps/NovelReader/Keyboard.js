@@ -6,7 +6,6 @@ import { handleImageGenKeyDown } from './ImageGenView.js';
 import { handleControlsKeyDown } from './ControlsView.js';
 import { handleMusicKeyDown } from './MusicView.js';
 import { setAltMode, getAltMode } from './Shared.js';
-import { refreshSettingsView } from './SettingsView.js';
 
 export async function handleKeyUp(app, event) {
     const { key } = event;
@@ -51,7 +50,6 @@ export async function handleKeyDown(app, event) {
             } else if (app.state === 'settings') {
                 app.popState();
             } else {
-                refreshSettingsView(app);
                 app.pushState('settings');
             }
             break;

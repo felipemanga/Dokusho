@@ -1,6 +1,8 @@
 import { NovelReaderModel } from './Model.js';
 import { NovelReaderView } from './View.js';
 import { loadTracks } from './MusicView.js';
+import { refreshSettingsView } from './SettingsView.js';
+import { refreshImageGenView } from './ImageGenView.js';
 
 class App {
     view;
@@ -62,6 +64,14 @@ class App {
         // Load tracks when entering music view
         if (this.#currentState === 'music') {
             loadTracks().catch(ex => console.error('MusicView loadTracks error:', ex));
+        }
+        // Refresh settings inputs when entering settings view
+        if (this.#currentState === 'settings') {
+            refreshSettingsView(this);
+        }
+        // Initialize image gen inputs when entering image gen view
+        if (this.#currentState === 'imageGen') {
+            refreshImageGenView(this);
         }
     }
 

@@ -13,13 +13,34 @@ import { handleKeyDown, handleKeyUp } from './Keyboard.js';
 import { loadChapterBG } from './Shared.js';
 
 export async function NovelReaderView(app) {
+    const start = performance.now();
+    const stamps = [];
     const window = new Window(400, 480);
     window.backgroundColor = 0xFF555588 >>> 0;
+    stamps.push(['window', performance.now()]);
 
     // Load persisted settings before building UI
     await loadNrSettings();
+    stamps.push(['settings', performance.now()]);
+
     let pal = palettes[nrSettings.paletteIndex || 0];
     setPalette(pal?.bg, pal?.text, pal?.hl);
+
+    const children = [];
+    children.push(createBooksView(app));
+    stamps.push(['createBooksView', performance.now()]);
+    children.push(createReaderView(app));
+    stamps.push(['createReaderView', performance.now()]);
+    children.push(createSettingsView(app));
+    stamps.push(['createSettingsView', performance.now()]);
+    children.push(createControlsView(app));
+    stamps.push(['createControlsView', performance.now()]);
+    children.push(createLlmView(app));
+    stamps.push(['createLlmView', performance.now()]);
+    children.push(createImageGenView(app));
+    stamps.push(['createImageGenView', performance.now()]);
+    children.push(createMusicView(app));
+    stamps.push(['createMusicView', performance.now()]);
 
     new Root({
         window,
@@ -35,15 +56,11 @@ export async function NovelReaderView(app) {
                     }),
                 ]
             }),
-            createBooksView(app),
-            createReaderView(app),
-            createSettingsView(app),
-            createControlsView(app),
-            createLlmView(app),
-            createImageGenView(app),
-            createMusicView(app)
+            ... children
         ]
     });
+
+    stamps.push(['rooot', performance.now()]);
 
     // Apply saved palette now that window exists
     applyPalette(nrSettings.paletteIndex || 0, window);
@@ -52,6 +69,8 @@ export async function NovelReaderView(app) {
     app.model.autoTranslateMode = getAutoTranslateMode();
 
     rndBG(nodeMap.bg);
+
+    stamps.push(['bg', performance.now()]);
 
     // Wire up model events
     app.model.addEventListener('bookOpened', () => {
@@ -111,5 +130,13 @@ export async function NovelReaderView(app) {
     GUI.addEventListener('keydown', (event) => handleKeyDown(app, event));
     GUI.addEventListener('keyup', (event) => handleKeyUp(app, event));
 
-    app.init({ view: nodeMap, window });
+    app.init({ view: nodeMap, window }).then(_=>{
+        stamps.push(['init', performance.now()]);
+        console.log('Timestamps:');
+        let prev = start;
+        for (let [tag, time] of stamps) {
+            console.log(`${tag}: ${Math.round(time - prev)}ms`);
+            prev = time;
+        }
+    });
 }

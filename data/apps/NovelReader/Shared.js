@@ -43,10 +43,12 @@ export let nrSettings = {
 export async function loadNrSettings() {
     try {
         const data = await fs.readFile(SettingsFile);
-        nrSettings = JSON.parse(data);
-        if (!nrSettings || typeof nrSettings !== 'object') nrSettings = {};
+        const loaded = JSON.parse(data);
+        if (loaded && typeof loaded === 'object') {
+            Object.assign(nrSettings, loaded);
+        }
     } catch (ex) {
-        nrSettings = {};
+        // Keep initial defaults
     }
     // Apply loaded settings
     if (nrSettings.textFontSize != null) {
@@ -84,10 +86,10 @@ export function getNovelImageFolder() {
 export async function saveNrSettings(llmVal, sdVal, bgVal, altBgVal) {
     nrSettings.textFontSize = getTextFontSize();
     nrSettings.paletteIndex = getCurrentPaletteIndex();
-    nrSettings.llmEndpoint = llmVal || null;
-    nrSettings.sdEndpoint = sdVal || null;
-    nrSettings.bgPath = bgVal || null;
-    nrSettings.altBgPath = altBgVal || null;
+    if (llmVal !== undefined) nrSettings.llmEndpoint = llmVal || null;
+    if (sdVal !== undefined) nrSettings.sdEndpoint = sdVal || null;
+    if (bgVal !== undefined) nrSettings.bgPath = bgVal || null;
+    if (altBgVal !== undefined) nrSettings.altBgPath = altBgVal || null;
     nrSettings.autoTranslateMode = getAutoTranslateMode();
     nrSettings.imgGenPostfix = nrSettings.imgGenPostfix || '';
     nrSettings.imgGenNegative = nrSettings.imgGenNegative || '';

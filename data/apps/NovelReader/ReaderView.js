@@ -2,7 +2,6 @@ import { nodeMap, Group, Label, Button, RichText } from '../../utils/gui/GUI.js'
 import { fontSmall, fontMedium, buttonRowY, palette, getTextFont, getTextFontSize, setTextFontSize, getAltMode } from './Shared.js';
 import { updateLlmView } from './LlmView.js';
 import { refreshImgGenPrompt } from './ImageGenView.js';
-import { refreshSettingsView } from './SettingsView.js';
 
 export function createReaderView(app) {
     const descRowY = 208;
@@ -126,7 +125,6 @@ export function createReaderView(app) {
                 x: 195,
                 y: buttonRowY,
                 onClick() {
-                    refreshSettingsView(app);
                     app.pushState('settings');
                 }
             }),

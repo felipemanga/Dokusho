@@ -145,7 +145,16 @@ class Syosetu {
             }
         };
 
-        const system_prompt = `You will be given some context and a line of text from a Japanese novel. Reply by parsing the line into the following format: ${JSON.stringify(schema)}`;
+        const schemaSimple = {
+            english: schema.properties.english.description,
+            words: [{
+                src: schema.properties.words.items.properties.src.description,
+                hir: schema.properties.words.items.properties.hir.description,
+                dic: schema.properties.words.items.properties.dic.description
+            }]
+        };
+
+        const system_prompt = `You will be given some context and a line of text from a Japanese novel. Reply by parsing the line into the following format: ${JSON.stringify(schemaSimple)}`;
         const message = `Context:
 \`\`\`
 ${context}
@@ -156,6 +165,7 @@ Line to parse:
 ${line}
 \`\`\`
 `;
+        const start = performance.now();
         console.log(`Translating: ${line}`);
         const parts =  await jsonPrompt(message, {
             system_prompt,
@@ -164,7 +174,8 @@ ${line}
         });
         if (!parts)
             throw new Error('No translation response');
-        console.log(`Got: ${JSON.stringify(parts)}`);
+        const end = performance.now();
+        console.log(`Got ${end - start}ms: ${JSON.stringify(parts)}`);
         parts.words = this.#validateWords(line, parts.words);
         return parts;
     }
@@ -310,6 +321,116 @@ export class NovelReaderModel extends EventDispatcher {
     translationProgress = {total: 0, current: 0, running: false};
     #cancelTranslation = false;
     #saveTimeout = null;
+
+    #getChapterDir(ncode, chapterIdx) {
+        return `${NovelFolder}/syosetu-${ncode}/ch${chapterIdx}/`;
+    }
+
+    // Save a single line to its own file.
+    // type: 'preface' or 'content'. sectionIdx: index within that section.
+    async #saveLineToFile(ncode, chapterIdx, sectionIdx, lineObj, type) {
+        const dir = this.#getChapterDir(ncode, chapterIdx);
+        const prefix = type === 'preface' ? 'Lp' : 'Lc';
+        const path = `${dir}${prefix}${sectionIdx}.json`;
+        try {
+            fs.writeFile(path, JSON.stringify({
+                text: lineObj.text,
+                english: lineObj.english,
+                words: lineObj.words
+            }));
+            console.log(`Saved line file: ${path}`);
+        } catch (ex) {
+            console.error('Failed to save line file:', path, ex);
+        }
+    }
+
+    // Load all per-line files for a chapter, return {preface, content} or null
+    // Files: Lp{N}.json (preface), Lc{N}.json (content)
+    // Lines are placed at their section index (sparse arrays).
+    async #loadLinesFromCache(ncode, chapterIdx) {
+        const dir = this.#getChapterDir(ncode, chapterIdx);
+        const preface = [];
+        const content = [];
+        try {
+            const entries = await fs.listDir(dir);
+            if (!entries || entries.length === 0) return null;
+
+            for (const e of entries) {
+                try {
+                    const m = e.name.match(/^(Lp|Lc)(\d+)\.json$/);
+                    if (!m) continue;
+                    const idx = parseInt(m[2]);
+                    const data = JSON.parse(await fs.readFile(`${dir}${e.name}`));
+                    const line = {
+                        text: data.text,
+                        english: data.english,
+                        words: data.words
+                    };
+                    const arr = m[1] === 'Lp' ? preface : content;
+                    arr[idx] = line; // place at exact index
+                } catch (ex) {
+                    console.error(`Failed to read line file ${e.name}:`, ex);
+                }
+            }
+            console.log(`Loaded ${preface.filter(Boolean).length} preface + ${content.filter(Boolean).length} content lines from ${dir}`);
+            return preface.some(Boolean) || content.some(Boolean) ? { preface, content } : null;
+        } catch (ex) {
+            return null;
+        }
+    }
+
+  // Migrate legacy single-file cache to per-line files, then delete legacy
+    async #migrateLegacyCache(ncode, chapterIdx) {
+        const legacyPath = `${NovelFolder}/syosetu-${ncode}-ch${chapterIdx}-translated.json`;
+        try {
+            const raw = await fs.readFile(legacyPath);
+            if (!raw) return;
+            const cached = JSON.parse(raw);
+            if (!cached || !cached.preface || !cached.content) return;
+
+            console.log(`Migrating legacy cache for ${ncode} ch${chapterIdx} (${cached.preface.length + cached.content.length} lines)`);
+            for (let i = 0; i < cached.preface.length; i++) {
+                await this.#saveLineToFile(ncode, chapterIdx, i, cached.preface[i], 'preface');
+            }
+            for (let i = 0; i < cached.content.length; i++) {
+                await this.#saveLineToFile(ncode, chapterIdx, i, cached.content[i], 'content');
+            }
+            try {
+                await fs.deleteFile(legacyPath);
+                console.log(`Deleted legacy cache: ${legacyPath}`);
+            } catch (ex) {
+                console.log(`Could not delete legacy cache: ${legacyPath}`);
+            }
+        } catch (ex) {
+            // No legacy file or parse error, ignore
+        }
+    }
+
+    // Merge cached translations onto raw chapter content.
+    // Raw is the source of truth for line count/order.
+    // Cached lines are matched by section index (preface[i] -> preface[i], content[i] -> content[i]).
+    #mergeCachedLines(raw, cached) {
+        const merged = { preface: [], content: [] };
+        for (let i = 0; i < raw.preface.length; i++) {
+            const c = cached.preface[i];
+            merged.preface.push({
+                text: raw.preface[i].text,
+                english: c?.english,
+                words: c?.words
+            });
+        }
+        for (let i = 0; i < raw.content.length; i++) {
+            const c = cached.content[i];
+            merged.content.push({
+                text: raw.content[i].text,
+                english: c?.english,
+                words: c?.words
+            });
+        }
+        const translatedCount = merged.preface.filter(l => l.english).length + merged.content.filter(l => l.english).length;
+        console.log(`Merged: ${translatedCount} translated lines out of ${merged.preface.length + merged.content.length} total`);
+        return merged;
+    }
 
     showEnglish = false;
 
@@ -541,24 +662,20 @@ Extract metadata for illustration generation:`;
             const chEntry = this.chapterIndex.chapters[chapterIndex];
             this.chapterTitle = chEntry ? chEntry.title : `Chapter ${chapterIndex + 1}`;
 
-            // Try cached translation first (skip if forceDownload)
-            if (!forceDownload) {
-                const cachePath = `${NovelFolder}/syosetu-${this.currentBook}-ch${chapterIndex}-translated.json`;
-                try {
-                    const cached = JSON.parse(await fs.readFile(cachePath));
-                    if (cached && cached.preface && cached.content) {
-                        this.chapterContent = cached;
-                        console.log(`Loaded cached translation for ch${chapterIndex}`);
-                    }
-                } catch (ex) {
-                    console.log(`Could not load syosetu-${this.currentBook}-ch${chapterIndex}-translated.json`, ex);
-                }
-            }
+            // Always fetch raw as base (fallback for missing/corrupted line files)
+            this.chapterContent = await this.syosetu.getChapterRaw(this.currentBook, chapterIndex, forceDownload);
+            console.log(`Loaded raw chapter ${chapterIndex}, ${this.getContentLines().length} lines`);
 
-            // Fetch raw if no cache at all
-            if (!this.chapterContent) {
-                this.chapterContent = await this.syosetu.getChapterRaw(this.currentBook, chapterIndex, forceDownload);
-                console.log(`Loaded raw chapter ${chapterIndex}, ${this.getContentLines().length} lines`);
+            // Layer per-line cached translations on top (skip if forceDownload)
+            if (!forceDownload) {
+                // Check for legacy single-file cache and migrate if present
+                await this.#migrateLegacyCache(this.currentBook, chapterIndex);
+
+                const cached = await this.#loadLinesFromCache(this.currentBook, chapterIndex);
+                if (cached) {
+                    this.chapterContent = this.#mergeCachedLines(this.chapterContent, cached);
+                    console.log(`Merged cached translations for ch${chapterIndex}`);
+                }
             }
 
             this.currentChapter = chapterIndex;
@@ -795,8 +912,10 @@ Extract metadata for illustration generation:`;
                 this.translationProgress.current = i + 1;
                 this.dispatchEvent(new Event('translationProgress'));
 
-                // Save intermediate progress: reconstruct chapterContent from translated lines
-                this.#saveTranslationCacheFromLines(lines, chapterIdx, prefaceLen);
+                // Save just the newly translated line to its own file (fire-and-forget in sync callback)
+                this.#saveTranslationCacheFromLines(lines, chapterIdx, prefaceLen, i).catch(ex => {
+                    console.error('Failed to save line during translation:', ex);
+                });
 
                 // Notify view if the current line just got translated (only if still on this chapter)
                 if (this.currentChapter === chapterIdx && i === this.currentLine) {
@@ -806,7 +925,7 @@ Extract metadata for illustration generation:`;
 
             // Final save (only if still on the same chapter)
             if (this.currentChapter === chapterIdx) {
-                this.saveTranslationCache();
+                await this.saveTranslationCache();
                 console.log(`Saved translation cache for ch${chapterIdx}`);
             }
             console.log('Translation complete');
@@ -824,7 +943,7 @@ Extract metadata for illustration generation:`;
         this.#cancelTranslation = true;
     }
 
-   // Restart chapter translation from scratch: force-re-download chapter, wipe translation cache
+ // Restart chapter translation from scratch: force-re-download chapter, wipe translation cache
     async restartChapterTranslation() {
         if (!this.currentBook || !this.chapterContent || this.translationProgress.running)
             return;
@@ -832,6 +951,22 @@ Extract metadata for illustration generation:`;
         const chapterIdx = this.currentChapter;
 
         console.log('Restarting chapter translation from scratch');
+        // Wipe per-line cache files
+        const dir = this.#getChapterDir(this.currentBook, chapterIdx);
+        try {
+            const entries = await fs.listDir(dir);
+            if (entries) {
+                for (const e of entries) {
+                    if (/^L[pc]\d+\.json$/.test(e.name)) {
+                        await fs.deleteFile(`${dir}${e.name}`);
+                    }
+                }
+            }
+            console.log(`Wiped per-line cache for ch${chapterIdx}`);
+        } catch (ex) {
+            console.log(`No per-line cache to wipe for ch${chapterIdx}`);
+        }
+
         this.chapterContent = null;
         this.translationProgress = { total: 0, current: 0, running: false };
         this.dispatchEvent(new Event('translationProgress'));
@@ -866,13 +1001,19 @@ Extract metadata for illustration generation:`;
         this.dispatchEvent(new Event('translationProgress'));
 
         try {
+            const prefaceLen = this.chapterContent.preface.length;
             await this.syosetu.translateLine(lines, this.currentLine, (i, total) => {
                 this.translationProgress.current = 1;
                 this.dispatchEvent(new Event('translationProgress'));
             });
 
-            // Save cache after re-translation
-            this.saveTranslationCache();
+            // Save only the re-translated line
+            const idx = this.currentLine;
+            if (idx < prefaceLen) {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, idx, line, 'preface');
+            } else {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, idx - prefaceLen, line, 'content');
+            }
             console.log('Re-translation complete for line', this.currentLine);
             this.dispatchEvent(new Event('lineTranslated'));
             this.dispatchEvent(new Event('lineChanged'));
@@ -895,11 +1036,18 @@ Extract metadata for illustration generation:`;
         console.log('Re-translating word:', word.src);
         const context = line.text;
 
-        try {
+             try {
             const info = await this.syosetu.getWordInfo(word.src, context);
             word.hir = info.hir || '';
             word.dic = info.dic || '';
-            this.saveTranslationCache();
+            // Save only the modified line
+            const prefaceLen = this.chapterContent.preface.length;
+            const idx = this.currentLine;
+            if (idx < prefaceLen) {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, idx, line, 'preface');
+            } else {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, idx - prefaceLen, line, 'content');
+            }
             console.log('Word re-translation complete:', word.src, '->', word.hir, word.dic);
         } catch (err) {
             this.error = err + '';
@@ -925,12 +1073,18 @@ Extract metadata for illustration generation:`;
         this.dispatchEvent(new Event('translationProgress'));
 
         try {
+            const prefaceLen = this.chapterContent.preface.length;
             await this.syosetu.translateLine(lines, index, (i, total) => {
                 this.translationProgress.current = 1;
                 this.dispatchEvent(new Event('translationProgress'));
             });
 
-            this.saveTranslationCache();
+            // Save only the translated line
+            if (index < prefaceLen) {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, index, line, 'preface');
+            } else {
+                await this.#saveLineToFile(this.currentBook, this.currentChapter, index - prefaceLen, line, 'content');
+            }
             this.dispatchEvent(new Event('lineTranslated'));
             console.log(`Auto-translation complete for line ${index}`);
         } catch (err) {
@@ -981,33 +1135,30 @@ Extract metadata for illustration generation:`;
         }
     }
 
-    // Save translation cache to disk (uses current chapter index)
-    saveTranslationCache() {
-        this.saveTranslationCacheFor(this.currentChapter);
+   // Save translation cache to disk (uses current chapter index)
+    async saveTranslationCache() {
+        await this.saveTranslationCacheFor(this.currentChapter);
     }
 
-    // Save translation cache to disk with explicit chapter index
-    saveTranslationCacheFor(chapterIdx) {
+    // Save translation cache to disk with explicit chapter index (per-line files)
+    async saveTranslationCacheFor(chapterIdx) {
         if (!this.chapterContent) return;
-        const cachePath = `${NovelFolder}/syosetu-${this.currentBook}-ch${chapterIdx}-translated.json`;
-        try {
-            fs.writeFile(cachePath, JSON.stringify(this.chapterContent));
-        } catch (ex) {
-            console.error('Failed to save translation cache:', ex);
+        for (let i = 0; i < this.chapterContent.preface.length; i++) {
+            await this.#saveLineToFile(this.currentBook, chapterIdx, i, this.chapterContent.preface[i], 'preface');
+        }
+        for (let i = 0; i < this.chapterContent.content.length; i++) {
+            await this.#saveLineToFile(this.currentBook, chapterIdx, i, this.chapterContent.content[i], 'content');
         }
     }
 
-    // Save translated lines to cache for a specific chapter (used during background translation)
-    #saveTranslationCacheFromLines(lines, chapterIdx, prefaceLen) {
-        const cached = {
-            preface: lines.slice(0, prefaceLen),
-            content: lines.slice(prefaceLen)
-        };
-        const cachePath = `${NovelFolder}/syosetu-${this.currentBook}-ch${chapterIdx}-translated.json`;
-        try {
-            fs.writeFile(cachePath, JSON.stringify(cached));
-        } catch (ex) {
-            console.error('Failed to save translation cache:', ex);
+   // Save translated lines to cache for a specific chapter (used during background translation)
+    // Only saves the line at `translatedIndex` (global index) to its own file
+    async #saveTranslationCacheFromLines(lines, chapterIdx, prefaceLen, translatedIndex) {
+        const line = lines[translatedIndex];
+        if (translatedIndex < prefaceLen) {
+            await this.#saveLineToFile(this.currentBook, chapterIdx, translatedIndex, line, 'preface');
+        } else {
+            await this.#saveLineToFile(this.currentBook, chapterIdx, translatedIndex - prefaceLen, line, 'content');
         }
     }
 }
