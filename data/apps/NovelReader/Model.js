@@ -11,7 +11,9 @@ const NovelMetadataSchema = {
     type: 'object',
     properties: {
         protagonistName: { type: 'string', description: 'Full name of the main character' },
-        protagonistGender: { type: 'string', description: 'Gender of the main character (male/female/non-binary)' },
+        protagonistGender: { type: 'string', description: 'Gender of the main character (male/female)' },
+        protagonistHairStyle: {type: 'string', description: 'Hair style and color (improvise if not described explicitely)'},
+        protagonistEyes: {type: 'string', description: 'Eye color (improvise if not described explicitely)'},
         protagonistAge: { type: 'string', description: 'Age or age range of the main character' },
         protagonistPhysicalDescription: { type: 'string', description: 'Hair, eyes, height, build, distinguishing features' },
         protagonistOutfit: { type: 'string', description: 'Typical clothing and accessories worn by the protagonist' },
@@ -20,7 +22,13 @@ const NovelMetadataSchema = {
         storySetting: { type: 'string', description: 'Time period and primary location(s) of the story' },
         atmosphere: { type: 'string', description: 'Overall mood and tone (e.g., dark, whimsical, tense, heartwarming)' },
         artStyle: { type: 'string', description: 'Preferred illustration style (e.g., anime, watercolor, realistic, pixel art)' },
-        coverImagePrompt: { type: 'string', description: 'Detailed prompt for generating a cover image for the book. Be sure to describe the protagonist and match the tone of the novel.' },
+        coverImagePrompt: { type: 'string', description: `Match the tone of the novel and use the following template:
+age, gender, hair, eye color, physical description, outfit, pose, expression
+BREAK
+optional secondary characters
+BREAK
+location description
+` },
     }
 };
 
@@ -32,7 +40,13 @@ const ChapterMetadataSchema = {
         charactersPresent: { type: 'string', description: 'Characters appearing in this chapter' },
         sceneSetting: { type: 'string', description: 'Specific location and time of day for the key scene' },
         emotionalTone: { type: 'string', description: 'Emotional mood of this chapter (e.g., joyful, melancholic, suspenseful)' },
-        backgroundImagePrompt: { type: 'string', description: 'Detailed prompt for generating a background image for this chapter. Be sure to describe the protagonist.' },
+        backgroundImagePrompt: { type: 'string', description: `Match the tone of the chapter and use the following template:
+age, gender, hair, eye color, physical description, outfit, pose, expression
+BREAK
+optional secondary characters
+BREAK
+location description
+` },
     }
 };
 
@@ -581,17 +595,23 @@ Extract metadata for illustration generation:`;
             }
 
             const novelMeta = this.books[this.currentBook]?.metadata || {};
+
+            let protagonist = [];
+            for (let key in novelMeta) {
+                let match = key.match(/^protagonist(.*)/);
+                if (!match)
+                    continue;
+                protagonist.push(`- ${match[1]}: ${novelMeta[key]}`);
+            }
+
             const novelContext = `
 Novel: ${this.books[this.currentBook]?.title}
 Genre: ${novelMeta.novelGenre || 'Unknown'}
 Setting: ${novelMeta.storySetting || 'Unknown'}
 Atmosphere: ${novelMeta.atmosphere || 'Unknown'}
 Art Style: ${novelMeta.artStyle || 'Not specified'}
-Protagonist: ${novelMeta.protagonistName || 'Unknown'}
-Gender: ${novelMeta.protagonistGender || 'Unknown'}
-Age: ${novelMeta.protagonistAge || 'Unknown'}
-Appearance: ${novelMeta.protagonistPhysicalDescription || 'Unknown'}
-Outfit: ${novelMeta.protagonistOutfit || 'Not specified'}
+Protagonist:
+${protagonist.join('\n')}
 Supporting Characters: ${novelMeta.supportingCharacters || 'None specified'}`.trim();
 
             const systemPrompt = `You are a novel analyst. Extract metadata from the provided chapter to help generate illustrations. All fields are optional. Respond with a JSON that follows this schema: ${JSON.stringify(ChapterMetadataSchema)}`;

@@ -2,6 +2,10 @@ import { nodeMap, Group, Label, Button, TextInput, RichText } from '../../utils/
 import { StableDiffusion } from '../../utils/StableDiffusion.js';
 import { fontSmall, fontMedium, fontLarge, buttonRowY, palette, getImgMode, setImgMode, getBgPath, setBG, getSdEndpoint, getNovelImageFolder, nrSettings, saveNrSettings } from './Shared.js';
 
+const btnW = 45;
+const btnStride = btnW + 15;
+const btnH = 16;
+
 let prompt = '';
 
 export function createImageGenView(app) {
@@ -102,7 +106,7 @@ export function createImageGenView(app) {
                 id: 'imgGenPromptPostfix',
                 x: 10,
                 y: 160,
-                width: 170,
+                width: 140,
                 font: fontSmall,
                 // text: nrSettings.imgGenPostfix ?? settings.imageGenPrompt,
                 placeholder: 'Prompt...'
@@ -112,7 +116,7 @@ export function createImageGenView(app) {
                 id: 'imgGenNegative',
                 x: 165,
                 y: 160,
-                width: 170,
+                width: 140,
                 font: fontSmall,
                 // text: nrSettings.imgGenNegative ?? 'lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality',
                 placeholder: 'Negative prompt...'
@@ -129,7 +133,7 @@ export function createImageGenView(app) {
                 id: 'imgGenWidth',
                 x: 25,
                 y: 192,
-                width: 80,
+                width: 50,
                 font: fontSmall,
                 text: nrSettings.imgGenWidth ?? '1024'
             }),
@@ -144,7 +148,7 @@ export function createImageGenView(app) {
                 id: 'imgGenHeight',
                 x: 125,
                 y: 192,
-                width: 80,
+                width: 50,
                 font: fontSmall,
                 // text: nrSettings.imgGenHeight ?? '1024'
             }),
@@ -159,7 +163,7 @@ export function createImageGenView(app) {
                 id: 'imgGenSteps',
                 x: 255,
                 y: 192,
-                width: 80,
+                width: 50,
                 font: fontSmall,
                 // text: nrSettings.imgGenSteps ?? '30'
             }),
@@ -168,9 +172,10 @@ export function createImageGenView(app) {
                 id: 'btnImgGenGenerate',
                 text: 'Generate',
                 font: fontMedium,
-                x: 160,
+                x: 320 - (btnStride) * 3,
                 y: buttonRowY,
-                width: 140,
+                width: btnW,
+                height: btnH,
                 onClick() {
                     generateImage(app, sdClient);
                 }
@@ -179,8 +184,10 @@ export function createImageGenView(app) {
                 id: 'btnImgGenSave',
                 text: 'Save',
                 font: fontMedium,
-                x: 230,
+                x: 320 - (btnStride) * 2,
                 y: buttonRowY,
+                width: btnW,
+                height: btnH,
                 onClick() {
                     saveGeneratedImage(app);
                 }
@@ -189,8 +196,10 @@ export function createImageGenView(app) {
                 id: 'btnImgGenBack',
                 text: 'Back',
                 font: fontMedium,
-                x: 275,
+                x: 320 - (btnStride) * 1,
                 y: buttonRowY,
+                width: btnW,
+                height: btnH,
                 onClick() { app.popState(); }
             })
         ]
@@ -291,7 +300,10 @@ export function refreshImageGenView(app) {
 
 export async function refreshImgGenPrompt(app) {
     const model = app.model;
-    if (!model.currentBook || !nodeMap.imgGenPrompt) return;
+    if (!model.currentBook || !nodeMap.imgGenPrompt) {
+        nodeMap.imgGenPrompt.text = `[EMPTY]`;
+        return;
+    }
 
     if (getImgMode() === 'cover') {
         const meta = model.getNovelMetadata(model.currentBook);

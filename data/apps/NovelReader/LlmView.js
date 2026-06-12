@@ -2,9 +2,14 @@ import { nodeMap, Group, Label, Button, RichText } from '../../utils/gui/GUI.js'
 import { fontSmall, fontMedium, fontLarge, buttonRowY, palette } from './Shared.js';
 
 // Metadata view mode: 'novel' | 'chapter' | 'novelPrompt' | 'chapterPrompt'
-let _metadataViewMode = 'novel';
+let _metadataViewMode = '';
 export function getMetadataViewMode() { return _metadataViewMode; }
-export function setMetadataViewMode(mode) { _metadataViewMode = mode; }
+export function setMetadataViewMode(mode) {
+    if (_metadataViewMode == mode)
+        return;
+    _metadataViewMode = mode;
+    refreshMetadataButtons();
+}
 
 const metadataButtons = ['novel', 'chapter', 'novelPrompt', 'chapterPrompt'];
 const metadataLabels = { novel: 'Novel', chapter: 'Chapter', novelPrompt: 'Novel Prompt', chapterPrompt: 'Chapter Prompt' };
@@ -14,9 +19,19 @@ function refreshMetadataButtons() {
         const btn = nodeMap['btnMeta' + mode.charAt(0).toUpperCase() + mode.slice(1)];
         if (!btn) continue;
         const isActive = mode === _metadataViewMode;
-        btn.color = isActive ? palette.highlight : palette.textDim;
-        btn.backgroundColor = isActive ? 0x44000000 : 0x22000000;
+        btn.textColor = isActive ? palette.highlight : palette.textDim;
+        btn.backgroundColor = (0xAAAAAA & 0xFFFFFF) | (isActive ? 0xFF000000 : 0x22000000);
     }
+}
+
+function calcWidth(cols) {
+    return ((320 - 20) / cols - 20) | 0;
+}
+function calcX(cols, i) {
+    return (10 + (20 + calcWidth(cols)) * i) | 0;
+}
+function calcY(r) {
+    return 30 + r * 40;
 }
 
 export function createLlmView(app) {
@@ -109,9 +124,9 @@ export function createLlmView(app) {
                 id: 'btnReTranslateLine',
                 text: 'Re-translate Line',
                 font: fontMedium,
-                x: 10,
-                y: 30,
-                width: 140,
+                x: calcX(2, 0),
+                y: calcY(0),
+                width: calcWidth(2),
                 onClick() {
                     app.model.reTranslateLine().catch(ex => {
                         console.error('Re-translate line failed:', ex);
@@ -123,9 +138,9 @@ export function createLlmView(app) {
                 id: 'btnContinueTranslation',
                 text: 'Continue Translation',
                 font: fontMedium,
-                x: 170,
-                y: 30,
-                width: 140,
+                x: calcX(2, 1),
+                y: calcY(0),
+                width: calcWidth(2),
                 onClick() {
                     app.model.translateChapter().catch(ex => {
                         console.error('Continue translation failed:', ex);
@@ -137,9 +152,9 @@ export function createLlmView(app) {
                 id: 'btnCancelTranslation',
                 text: 'Cancel Translation',
                 font: fontMedium,
-                x: 10,
-                y: 70,
-                width: 140,
+                x: calcX(2, 0),
+                y: calcY(1),
+                width: calcWidth(2),
                 visible: false,
                 onClick() {
                     app.model.cancelTranslation();
@@ -149,9 +164,9 @@ export function createLlmView(app) {
                 id: 'btnRestartTranslation',
                 text: 'Restart Translation',
                 font: fontMedium,
-                x: 170,
-                y: 70,
-                width: 140,
+                x: calcX(2, 1),
+                y: calcY(1),
+                width: calcWidth(2),
                 onClick() {
                     app.model.restartChapterTranslation().catch(ex => {
                         console.error('Restart translation failed:', ex);
@@ -163,9 +178,9 @@ export function createLlmView(app) {
                 id: 'btnUpdateWord',
                 text: 'Re-translate Word',
                 font: fontMedium,
-                x: 10,
-                y: 70,
-                width: 300,
+                x: calcX(2, 0),
+                y: calcY(1),
+                width: calcWidth(2),
                 onClick() {
                     nodeMap.llmStatus.text = 'Updating word...';
                     app.model.reTranslateWord().then(() => {
@@ -179,11 +194,11 @@ export function createLlmView(app) {
             // Metadata buttons
             new Button({
                 id: 'btnUpdateNovelMetadata',
-                text: 'Update Novel Metadata',
-                font: fontSmall,
-                x: 10,
-                y: 110,
-                width: 140,
+                text: 'Update Novel',
+                font: fontMedium,
+                x: calcX(3, 0),
+                y: calcY(2),
+                width: calcWidth(3),
                 onClick() {
                     nodeMap.llmStatus.text = 'Updating novel metadata...';
                     app.model.updateNovelMetadata().then(() => {
@@ -196,12 +211,39 @@ export function createLlmView(app) {
                 }
             }),
             new Button({
+                id: 'btnMetaNovel',
+                text: 'Metadata',
+                font: fontMedium,
+                x: calcX(3, 1),
+                y: calcY(2),
+                width: calcWidth(3),
+                color: palette.highlight,
+                onClick() {
+                    setMetadataViewMode('novel');
+                    updateMetadataDisplay(app);
+                }
+            }),
+            new Button({
+                id: 'btnMetaNovelPrompt',
+                text: 'Prompt',
+                font: fontMedium,
+                x: calcX(3, 2),
+                y: calcY(2),
+                width: calcWidth(3),
+                color: palette.textDim,
+                backgroundColor: 0x22000000,
+                onClick() {
+                    setMetadataViewMode('novelPrompt');
+                    updateMetadataDisplay(app);
+                }
+            }),
+            new Button({
                 id: 'btnUpdateChapterMetadata',
-                text: 'Update Chapter Metadata',
-                font: fontSmall,
-                x: 170,
-                y: 110,
-                width: 140,
+                text: 'Update Chapter',
+                font: fontMedium,
+                x: calcX(3, 0),
+                y: calcY(3),
+                width: calcWidth(3),
                 onClick() {
                     nodeMap.llmStatus.text = 'Updating chapter metadata...';
                     app.model.updateChapterMetadata().then(() => {
@@ -213,64 +255,31 @@ export function createLlmView(app) {
                     });
                 }
             }),
-            // Metadata filter buttons
-            new Button({
-                id: 'btnMetaNovel',
-                text: 'Novel',
-                font: fontSmall,
-                x: 10,
-                y: 150,
-                width: 72,
-                color: palette.highlight,
-                backgroundColor: 0x44000000,
-                onClick() {
-                    setMetadataViewMode('novel');
-                    refreshMetadataButtons();
-                    updateMetadataDisplay(app);
-                }
-            }),
             new Button({
                 id: 'btnMetaChapter',
-                text: 'Chapter',
-                font: fontSmall,
-                x: 90,
-                y: 150,
-                width: 72,
+                text: 'Metadata',
+                font: fontMedium,
+                x: calcX(3, 1),
+                y: calcY(3),
+                width: calcWidth(3),
                 color: palette.textDim,
                 backgroundColor: 0x22000000,
                 onClick() {
                     setMetadataViewMode('chapter');
-                    refreshMetadataButtons();
-                    updateMetadataDisplay(app);
-                }
-            }),
-            new Button({
-                id: 'btnMetaNovelPrompt',
-                text: 'Novel Prompt',
-                font: fontSmall,
-                x: 170,
-                y: 150,
-                width: 72,
-                color: palette.textDim,
-                backgroundColor: 0x22000000,
-                onClick() {
-                    setMetadataViewMode('novelPrompt');
-                    refreshMetadataButtons();
                     updateMetadataDisplay(app);
                 }
             }),
             new Button({
                 id: 'btnMetaChapterPrompt',
-                text: 'Chapter Prompt',
-                font: fontSmall,
-                x: 250,
-                y: 150,
-                width: 72,
+                text: 'Prompt',
+                font: fontMedium,
+                x: calcX(3, 2),
+                y: calcY(3),
+                width: calcWidth(3),
                 color: palette.textDim,
                 backgroundColor: 0x22000000,
                 onClick() {
                     setMetadataViewMode('chapterPrompt');
-                    refreshMetadataButtons();
                     updateMetadataDisplay(app);
                 }
             }),
