@@ -14,6 +14,9 @@ const iconSize = 32;
 const iconSizeLarge = 40;
 const iconColor = 0x11000000;
 
+const btnW = 37;
+const btnStride = btnW + 15;
+
 // Pre-generated icon images (set during init)
 let _iconPrev = null;
 let _iconPlay = null;
@@ -258,7 +261,8 @@ export function createMusicView(app) {
                 id: 'musicBack',
                 text: 'Back',
                 font: fontMedium,
-                x: 230,
+                width: btnW,
+                x: 320 - (btnStride) * 1,
                 y: buttonRowY,
                 onClick() { app.popState(); }
             }),
@@ -315,13 +319,12 @@ export async function loadTracks() {
         console.log('Loading music from:', fullPath);
         const files = await fs.listDir(fullPath);
         const mp3Files = files
-            .filter(e => e.isFile && /\.mp3$/i.test(e.name))
-            .map(e => e.name)
-            .sort((a, b) => a.localeCompare(b));
+              .filter(e => e.isFile && /\.mp3$|\.opus$/i.test(e.name))
+              .map(e => e.name)
+              .sort((a, b) => a.localeCompare(b));
 
         console.log('Found', mp3Files.length, 'MP3 files');
         nodeMap.musicStatus.text = mp3Files.length + ' tracks found';
-
         setMusicPlaylist(mp3Files);
         updateMusicTrackOrder();
         _scrollOffset = 0;
@@ -386,7 +389,7 @@ function initRowPool() {
         const label = new Label({
             x: 5,
             y: trackRowY + i * trackRowH,
-            font: fontSmall,
+            font: fontLarge,
             color: palette.textNormal,
             text: ''
         });
@@ -428,10 +431,15 @@ function renderVisibleRows() {
         }
 
         label.visible = true;
-        label.y = y;
+        label.y = y - 8;
         const trackIdx = trackOrder[listIdx];
         const fileName = playlist[trackIdx];
-        const displayName = fileName.replace(/\.mp3$/i, '');
+        const displayName = fileName
+              .replace(/[【】「」『』'"＂|]|\.\s+|\.mp3|.mkv|\.opus|\.mp4|\.webm|\[[a-z0-9_\-]{8,11}\]/ig, ' ')
+              .replace(/\(.*?(?:official|music|audio|video|lyrics).*?\)/ig, '')
+              .replace(/[_\s]+/g, ' ')
+              .trim()
+              .substr(0, 55);
         const isSelected = listIdx === _selectedDisplayIdx;
         const isPlaying = trackIdx === currentTrack && currentTrack >= 0;
 
@@ -815,7 +823,7 @@ export async function handleMusicKeyDown(app, event) {
     case 'ZRight':
         stopMusic();
         break;
-    case 'Enter':
+    case 'Select':
         if (getMusicPlaylist().length > 0) {
             const trackOrder = getMusicTrackOrder();
             const selectedIdx = trackOrder[_selectedDisplayIdx];

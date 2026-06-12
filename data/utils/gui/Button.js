@@ -1,6 +1,8 @@
 import { Ctrl } from './Ctrl.js';
 import { Event } from '../EventDispatcher.js';
+import { coordVars } from './coordExpression.js';
 import { createNinePatchFrame, calculateNinePatchKey } from './FrameCache.js';
+import { intToRgba, rgbaToInt, rgbToHsl, hslToRgb } from '../Color.js';
 
 export class Button extends Ctrl {
     #labelNode = new SpanNode();
@@ -11,6 +13,8 @@ export class Button extends Ctrl {
             node:new Node(),
             containerNode: new NinePatch(),
             state:'',
+            width:'autowidth',
+            height:'autoheight',
             states: ['default', 'hover', 'press', 'disabled']}, params);
 
         const node = this.node;
@@ -24,15 +28,32 @@ export class Button extends Ctrl {
         this.addEventListener('mouseout', () => this.state = 'default');
         this.addEventListener('mousedown', () => this.state = 'press');
         this.addEventListener('mouseup', () => this.state = 'hover');
+
+        let backgroundColor = this.getAttr('backgroundColor');
+        if (backgroundColor !== undefined)
+            this.backgroundColor = backgroundColor;
     }
 
     get text() {return this.getAttr("text");}
     set text(value) {this.setAttr("text", value);}
 
+    set backgroundColor(color) {
+        color = color >>> 0;
+        const [r, g, b, a] = intToRgba(color);
+        const [h, s, l] = rgbToHsl(r, g, b);
+
+        this.setAttr('defaultColor', rgbaToInt(...hslToRgb(h, s, l), a));
+        this.setAttr('hoverColor', rgbaToInt(...hslToRgb(h, s, Math.min(1, l + 0.1)), a));
+        this.setAttr('pressColor', rgbaToInt(...hslToRgb(h, s, Math.max(0, l - 0.15)), a));
+        this.setAttr('disabledColor', rgbaToInt(...hslToRgb(h, Math.max(0, s - 0.3), l), a));
+
+        this.dirtyState();
+    }
+
     redraw(state, attrs) {
         this.#updateLabel(state, attrs);
         this.#updateBackground(state, attrs);
-        this.#centerLabel();
+        // this.#centerLabel();
     }
 
     #updateLabel(state, attrs) {
@@ -95,14 +116,12 @@ export class Button extends Ctrl {
     #centerLabel() {
         const frame = this.containerNode;
         if (!frame) return;
-        let innerWidth = (this.#labelNode.width) | 0;
-        let innerHeight = (this.#labelNode.height) | 0;
-        this.containerNode.setInnerSize(innerWidth, innerHeight);
-        const frameWidth = frame.width;
-        const frameHeight = frame.height;
+        let width = this.finalWidth;
+        let height = this.finalHeight;
+        frame.setInnerSize(width, height);
         const margins = frame.margins;
-        let x = (frameWidth - margins.left - margins.right) / 2;
-        let y = (frameHeight - margins.top - margins.bottom) / 2;
+        let x = width / 2;
+        let y = height / 2;
         this.#labelNode.position = {x, y};
     }
 
@@ -110,8 +129,12 @@ export class Button extends Ctrl {
         super.applyState(this.enabled ? state : 'disabled');
     }
 
-    resize() {
-        super.resize();
+    resizeSelf() {
+        Object.assign(coordVars, {
+            autowidth: (this.#labelNode.width) | 0,
+            autoheight: (this.#labelNode.height) | 0
+        });
+        super.resizeSelf();
         this.#centerLabel();
     }
 }

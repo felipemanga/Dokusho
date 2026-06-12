@@ -1,28 +1,46 @@
 import { getFont } from './gui/FontCache.js';
 
+const defOpts = {
+    regularSize : 16,
+    codeSize : 0.8,
+    linkSize : 1.2,
+    headerSizes : null,
+    color : 0xFFFFFFFF,
+    headerColor : 0xFFFFCC00,
+    codeColor : 0xFFAAAAAA,
+    codeBgColor : 0xAA222222,
+    quoteBarColor : 0xFF666666,
+    quoteTextColor : 0xFF333333,
+    quoteBgColor : 0x44E0E0E0,
+    linkColor : 0xFF0000EE,
+    fontPaths : {
+        regular: 'data/Lato/Lato-Regular.ttf',
+        bold: 'data/Lato/Lato-Bold.ttf',
+        italic: 'data/Lato/Lato-Italic.ttf',
+        boldItalic: 'data/Lato/Lato-BoldItalic.ttf',
+        heavy: 'data/Lato/Lato-Black.ttf',
+        mono: 'data/PressStart2P-Regular.ttf'
+    }
+};
+
 export class Markdown {
 
     static render(text, options = {}) {
+        options = Object.assign({}, defOpts, options);
         let {
-            regularSize = 16,
-            codeSize = 16,
+            regularSize,
+            codeSize,
+            linkSize,
             headerSizes,
-            color = 0xFFFFFFFF,
-            headerColor = 0xFFFFCC00,
-            codeColor = 0xFFAAAAAA,
-            codeBgColor = 0xAA222222,
-            quoteBarColor = 0xFF666666,
-            quoteTextColor = 0xFF333333,
-            quoteBgColor = 0x44E0E0E0,
-            linkColor = 0xFF0000EE,
-            fontPaths = {
-                regular: 'data/Lato/Lato-Regular.ttf',
-                bold: 'data/Lato/Lato-Bold.ttf',
-                italic: 'data/Lato/Lato-Italic.ttf',
-                boldItalic: 'data/Lato/Lato-BoldItalic.ttf',
-                heavy: 'data/Lato/Lato-Black.ttf',
-                mono: 'data/PressStart2P-Regular.ttf'
-            }
+            color,
+            headerColor,
+            codeColor,
+            codeBgColor,
+            quoteBarColor,
+            quoteTextColor,
+            quoteBgColor,
+            linkColor,
+            fontPaths
         } = options;
 
         if (!headerSizes) {
@@ -90,17 +108,17 @@ export class Markdown {
 
             // Handle headers
             if (line.startsWith('# ')) {
-                this.parseInline(line.substring(2), segments, fontPaths, { size: headerSizes[0], color: headerColor, linkColor });
+                this.parseInline(line.substring(2), segments, fontPaths, { ...options, size: headerSizes[0], color: headerColor, linkColor });
                 segments.push({ text: '\n', font: getFont(fontPaths.bold, headerSizes[0]), color: headerColor });
                 listCounters = [];
                 continue;
             } else if (line.startsWith('## ')) {
-                this.parseInline(line.substring(3), segments, fontPaths, { size: headerSizes[1], color: headerColor, linkColor });
+                this.parseInline(line.substring(3), segments, fontPaths, { ...options, size: headerSizes[1], color: headerColor, linkColor });
                 segments.push({ text: '\n', font: getFont(fontPaths.bold, headerSizes[1]), color: headerColor });
                 listCounters = [];
                 continue;
             } else if (line.startsWith('### ')) {
-                this.parseInline(line.substring(4), segments, fontPaths, { size: headerSizes[2], color: headerColor, linkColor });
+                this.parseInline(line.substring(4), segments, fontPaths, { ...options, size: headerSizes[2], color: headerColor, linkColor });
                 segments.push({ text: '\n', font: getFont(fontPaths.bold, headerSizes[2]), color: headerColor });
                 listCounters = [];
                 continue;
@@ -118,7 +136,7 @@ export class Markdown {
                     segments.push({ width: 4, bgColor: quoteBarColor, vAlign: 'middle' });
                     segments.push({ width: 4, bgColor: quoteBgColor, vAlign: 'middle' });
                 }
-                this.parseInline(quoteContent, segments, fontPaths, { size: regularSize, color: quoteTextColor, bgColor: quoteBgColor, linkColor });
+                this.parseInline(quoteContent, segments, fontPaths, { ...options, size: regularSize, color: quoteTextColor, bgColor: quoteBgColor, linkColor });
                 segments.push({ bgColor: quoteBgColor, vAlign: 'middle' }); // Flexible spacer to fill line
                 segments.push({ text: '\n', font: getFont(fontPaths.regular, regularSize), color: color });
                 listCounters = [];
@@ -131,7 +149,7 @@ export class Markdown {
 
             if (unorderedMatch) {
                 segments.push({ text: indentStr + "• ", font: getFont(fontPaths.regular, regularSize), color: color });
-                this.parseInline(unorderedMatch[1], segments, fontPaths, { size: regularSize, color: color, linkColor });
+                this.parseInline(unorderedMatch[1], segments, fontPaths, { ...options, size: regularSize, color: color, linkColor });
                 segments.push({ text: '\n', font: getFont(fontPaths.regular, regularSize), color: color });
                 continue;
             } else if (orderedMatch) {
@@ -143,7 +161,7 @@ export class Markdown {
                 }
                 const num = listCounters[indentLevel];
                 segments.push({ text: indentStr + num + ". ", font: getFont(fontPaths.regular, regularSize), color: color });
-                this.parseInline(orderedMatch[2], segments, fontPaths, { size: regularSize, color: color, linkColor });
+                this.parseInline(orderedMatch[2], segments, fontPaths, { ...options, size: regularSize, color: color, linkColor });
                 segments.push({ text: '\n', font: getFont(fontPaths.regular, regularSize), color: color });
                 continue;
             }
@@ -152,7 +170,7 @@ export class Markdown {
             listCounters = [];
 
             // Handle regular line
-            this.parseInline(line, segments, fontPaths, { size: regularSize, color: color, linkColor });
+            this.parseInline(line, segments, fontPaths, { ...options, size: regularSize, color: color, linkColor });
             if (i < lines.length - 1) {
                 segments.push({ text: '\n', font: getFont(fontPaths.regular, regularSize), color: color });
             }
@@ -162,14 +180,14 @@ export class Markdown {
     }
 
     static parseInline(text, segments, fontPaths, state) {
-        const { size, color, bgColor, linkColor, bold = false, italic = false, code = false, linkData = null } = state;
+        const { size, color, bgColor, linkColor, bold = false, italic = false, code = false, link = true, linkData = null } = state;
 
         if (!text) return;
 
         const common = { bgColor, data: linkData || undefined };
 
         if (code) {
-            segments.push({ text: text, font: getFont(fontPaths.mono, size * 0.8), color: 0xFFAAAAAA, ...common });
+            segments.push({ text: text, font: getFont(fontPaths.mono, Math.max(1, Math.ceil(size * state.codeSize))), color: state.codeColor ?? 0xFFAAAAAA, ...common });
             return;
         }
 
@@ -201,10 +219,14 @@ export class Markdown {
             if (bold && italic) fontPath = fontPaths.boldItalic;
             else if (bold) fontPath = fontPaths.bold;
             else if (italic) fontPath = fontPaths.italic;
-            let matchSize = size;
+
+            let fontSize = size;
             if (bold && fontPath == fontPaths.regular)
-                matchSize = Math.round(matchSize * 1.2);
-            segments.push({ text, font: getFont(fontPath, matchSize), color, ...common });
+                fontSize = Math.round(fontSize * 1.2);
+            if (link)
+                fontSize = Math.max(1, Math.ceil(size * state.linkSize));
+            segments.push({ text, font: getFont(fontPath, fontSize), color, ...common });
+
             return;
         }
 
@@ -245,7 +267,7 @@ export class Markdown {
                 segments.push({ text: `[Image: ${m[1] || m[2]}]`, font: getFont(fontPaths.mono, size * 0.8), color: 0xFFFF0000, ...common });
             }
         } else if (bestMatch.type === 'link') {
-            this.parseInline(m[1], segments, fontPaths, { ...state, color: linkColor, linkData: m[2] });
+            this.parseInline(m[1], segments, fontPaths, { ...state, link: true, color: linkColor, linkData: m[2] });
         } else if (bestMatch.type === 'code') {
             this.parseInline(m[1], segments, fontPaths, { ...state, code: true });
         } else if (bestMatch.type === 'boldItalic') {

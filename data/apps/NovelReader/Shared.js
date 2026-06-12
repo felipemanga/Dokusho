@@ -172,12 +172,12 @@ export async function setBG(node, image) {
     const s = Math.max(400 / w, 240 / h);
     const sw = w * s;
     const sh = h * s;
-    node.anchorX = 0;
-    node.anchorY = 0;
+    node.anchorX = 0.5;
+    node.anchorY = 1;
     node.width = sw;
     node.height = sh;
-    node.x = (400/2 - sw/2) / s;
-    node.y = (240/2 - sh/2) / s;
+    node.x = 400/2;
+    node.y = 240;
 }
 
 export async function rndBG(node) {

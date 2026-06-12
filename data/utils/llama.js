@@ -7,6 +7,7 @@ export const llamaSettings = {
     temperature: settings.llmTemperature || 1,
     max_tokens: settings.llmMaxTokens || undefined,
     endpoint: settings.llmServerEndpoint || "http://localhost:8081/v1/chat/completions",
+    embeddings_endpoint: settings.llmEmbeddingsEndpoint || "http://localhost:8081/v1/embeddings",
     thinking_budget_tokens: settings.llmThinkingBudgetTokens || 10000,
     reasoning_budget_end_tag: settings.llmReasoningBudgetEndTag || " ... thinking budget exceeded, let's answer now. \n",
     verbose: false
@@ -26,6 +27,13 @@ export function validateSchema(value, schema, path = "$") {
 
     let type = schema.type;
     if (type) {
+        if (Array.isArray(type)) {
+            for (const t of type) {
+                if (t === 'null' && value === null) return true;
+                if (t !== 'null' && validateSchema(value, { ...schema, type: t }, path)) return true;
+            }
+            return fail(`Type mismatch: expected one of ${type.join(', ')}`);
+        }
         if (type === 'array') {
             if (!Array.isArray(value))
                 return fail('Not an array');
@@ -244,7 +252,7 @@ export function extractJSON(str, debug) {
 export async function simplePrompt(prompt, settings = {}) {
     settings = Object.assign({}, llamaSettings, settings);
 
-    let messages = [];
+    let messages = settings.messages ?? [];
     if (typeof prompt == 'string') {
         if (settings.system_prompt) {
             messages.push({
@@ -252,10 +260,12 @@ export async function simplePrompt(prompt, settings = {}) {
                 content: settings.system_prompt
             });
         }
-        messages.push({
-            role: "user",
-            content: prompt
-        });
+        if (prompt) {
+            messages.push({
+                role: "user",
+                content: prompt
+            });
+        }
         if (settings.verbose)
             console.log(`[${settings.task ?? 'LLAMA'}]: ${prompt}`);
     } else if (Array.isArray(prompt)) {
@@ -289,12 +299,14 @@ export async function simplePrompt(prompt, settings = {}) {
                 await new Promise(ok => setTimeout(ok, 3000));
                 continue;
             }
+
             // console.log(JSON.stringify(result, null, 2));
             const content = result?.choices?.[0]?.message?.content;
             const reasoning = result?.choices?.[0]?.message?.reasoning_content;
             // if (reasoning) console.log(reasoning);
             if (!content)
                 return content;
+            messages.push(result?.choices?.[0]?.message);
             let clean = content.replace(/.*<\/think>/gm, '');
             if (!settings.json_mode)
                 return clean;
@@ -302,16 +314,10 @@ export async function simplePrompt(prompt, settings = {}) {
             if (object && settings.schema && !validateSchema(object, settings.schema)) {
                 console.error(`LLAMA: Schema validation failed`);
                 console.error(JSON.stringify(object, null, 2));
-                if (i == 0) {
-                    messages.push({
-                        role: 'assistant',
-                        content: clean
-                    });
-                    messages.push({
-                        role: 'user',
-                        content: `Error. Response must match schema: ${JSON.stringify(settings.schema)}`
-                    });
-                }
+                messages.push({
+                    role: 'user',
+                    content: `Error. Response must match schema: ${JSON.stringify(settings.schema)}`
+                });
                 continue;
             }
             return object;
@@ -323,4 +329,42 @@ export async function simplePrompt(prompt, settings = {}) {
 
 export async function jsonPrompt(prompt, settings = {}) {
     return simplePrompt(prompt, Object.assign({json_mode:true}, settings));
+}
+
+export async function getEmbedding(input, settings = {}) {
+    settings = Object.assign({}, llamaSettings, settings);
+
+    const payload = {
+        input,
+        model: settings.llmModel || "gpt-4o-mini",
+        encoding_format: "float"
+    };
+
+    for (let i = 0; i < settings.max_retries; ++i) {
+        try {
+            const response = await fetch(settings.embeddings_endpoint, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload)
+            });
+
+            let result;
+            try {
+                result = await response.json();
+            } catch (ex) {
+                console.error("LLAMA: Embeddings fetch error", settings.embeddings_endpoint);
+                console.error(ex);
+                await new Promise(ok => setTimeout(ok, 3000));
+                continue;
+            }
+
+            const embedding = result?.data?.[0]?.embedding;
+            if (!embedding)
+                return null;
+            return embedding;
+        } catch (e) {
+            console.error("LLAMA: Embeddings fetch failed:", e);
+        }
+    }
+    return null;
 }

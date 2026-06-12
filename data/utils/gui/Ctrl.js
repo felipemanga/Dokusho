@@ -18,6 +18,7 @@ export class Ctrl {
     #wasInit = false;
     #enabled = true;
     #root = null;
+    #userData;
 
     constructor(...args) {
         const baseState = Object.assign({}, ...args);
@@ -32,11 +33,13 @@ export class Ctrl {
             visible = true,
             floating = false,
             id = 'ctrl-' + nextNodeId++,
-            verbose = false
+            verbose = false,
+            userData = null
         } = baseState;
 
         this.#eventDispatcher.self = this;
         this.#node = node;
+        this.#userData = userData;
         this.#containerNode = containerNode;
         this.#enabled = enabled;
         this.#node.id = id;
@@ -99,7 +102,7 @@ export class Ctrl {
                 let size = parent.size();
                 console.log(`${indent}  clip ${parent.id} bounds: (${size.width}, ${size.height})`);
             }
-            let scale = parent.scale();
+            let scale = parent.scale;
             scaleX *= scale.x;
             scaleY *= scale.y;
             console.log(`${indent}  parent ${parent.id} scale: (${scaleX ?? 1}, ${scaleY ?? 1})`);
@@ -108,6 +111,25 @@ export class Ctrl {
         console.log(`${indent}  effective scale: (${scaleX}, ${scaleY})`);
         for (let child of this.children) {
             child.printDebug(depth + 1);
+        }
+    }
+
+    getUserData(key) {
+        return this.#userData?.[key];
+    }
+
+    setUserData(key, value) {
+        if (!this.#userData)
+            this.#userData = {};
+        return this.#userData[key] = value;
+    }
+
+    traverse(cb) {
+        if (cb(this) === false)
+            return false;
+        for (let i = 0; i < this.#children.length; ++i) {
+            if (this.#children[i].traverse(cb) === false)
+                return false;
         }
     }
 
@@ -296,7 +318,8 @@ export class Ctrl {
 
     get visible() { return this.getAttr('visible'); }
     set visible(value) {
-        this.setAttr('visible', value);
+        this.#attrs.visible = !!value;
+        // this.setAttr('visible', value);
         this.node.visible = !!value;
     }
 
@@ -440,6 +463,10 @@ export class Ctrl {
         return this.node.toLocal(x, y);
     }
 
+    toWorld(x, y) {
+        return this.node.toWorld(x, y);
+    }
+
     addEventListener(type, listener) {
         this.#eventDispatcher.addEventListener(type, listener);
     }
@@ -456,8 +483,16 @@ export class Ctrl {
         return GUI.getFocus().ctrl === this;
     }
 
+    blur() {
+        if (GUI.getFocus().ctrl == this) {
+            GUI.setFocus(null, null);
+        }
+    }
+
     focus() {
-        GUI.setFocus(this.node, this);
-        this.dispatchEvent(new Event('focus', {}));
+        if (GUI.getFocus().ctrl != this) {
+            GUI.setFocus(this.node, this);
+            this.dispatchEvent(new Event('focus', {}));
+        }
     }
 }

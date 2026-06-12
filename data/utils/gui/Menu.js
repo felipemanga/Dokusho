@@ -6,7 +6,6 @@ export class Menu extends Group {
 
     constructor(params = {}) {
         super({
-            node: new Node(),
             floating: true,
             ...params
         });
@@ -35,8 +34,10 @@ export class Menu extends Group {
         return [...this.#items];
     }
 
-    calculateSize() {
-        const attrs = this.attrs;
+    calculateSize(params = {}) {
+        const attrs = Object.assign({}, this.attrs, params);
+        let width = attrs.width;
+        let height = attrs.height;
 
         const paddingLeft = attrs.paddingLeft ?? attrs.padding ?? 0;
         const paddingRight = attrs.paddingRight ?? attrs.padding ?? 0;
@@ -64,6 +65,8 @@ export class Menu extends Group {
         }
 
         for (const item of this.#items) {
+            if (!item.visible)
+                continue;
             y += Math.max(my, item.attrs.marginTop ?? 0);
             item.y = y;
             y += item.attrs.paddingTop ?? 0;
@@ -74,6 +77,19 @@ export class Menu extends Group {
             item.width = itemWidth;
         }
 
-        this.setSize(itemWidth + paddingX + marginX, y + paddingBottom);
+        let innerWidth = itemWidth + paddingX + marginX;
+        let innerHeight = y + paddingBottom;
+        if (!height || innerHeight < height)
+            height = innerHeight;
+        if (!width) {
+            width = innerWidth;
+            if (innerHeight > height && attrs.overflow == 'scroll')
+                width += 20;
+        }
+
+        this.innerWidth = innerWidth;
+        this.innerHeight = innerHeight;
+        this.setSize(width, height);
+        this.resizeSelf();
     }
 }

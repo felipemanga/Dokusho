@@ -11,13 +11,14 @@ import {MenuItem} from "./MenuItem.js";
 import {Menu} from "./Menu.js";
 import {ImageCtrl} from "./ImageCtrl.js";
 import {RichText} from "./RichText.js";
+import {DropDown} from "./DropDown.js";
 
 export {
     nodeMap,
     Ctrl, Label, Button,
     Group, Root, TextInput,
     MenuBar, MenuItem, Menu,
-    ImageCtrl, RichText
+    ImageCtrl, RichText, DropDown
 };
 
 let hover = {node: null, ctrl: null};

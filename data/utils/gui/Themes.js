@@ -109,6 +109,7 @@ const themes = {
             hoverColor: 0xFFF0F0F0,
             focusColor: 0xFFFFFFFF,
             disabledColor: 0xFFCCCCCC,
+            preeditColor: 0xFF222222,
             textColor: 0xFF222222,
             placeholderColor: 0xFF888888,
             selectionColor: 0x404285F4,

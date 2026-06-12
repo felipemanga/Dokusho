@@ -6,6 +6,9 @@ const thumbX = 8;
 const thumbY = 8;
 const cardHeight = thumbSize + thumbY * 2;
 const cardSpacing = 16;
+const btnW = 37;
+const btnStride = btnW + 15;
+const btnH = 16;
 
 export function createBooksView(app) {
     const booksView = new Group({
@@ -29,13 +32,15 @@ export function createBooksView(app) {
                 id: 'addBookInput',
                 x: 10,
                 y: 240 + buttonRowY,
-                width: 95,
+                width: 85,
                 font: fontSmall,
                 placeholder:"NCode..."
             }),
             new Button({
-                x: 95,
+                x: 320 - (btnStride) * 4,
                 y: 240 + buttonRowY,
+                width: btnW,
+                height: btnH,
                 font: fontSmall,
                 text: 'Add Book',
                 onClick(){
@@ -46,7 +51,9 @@ export function createBooksView(app) {
                 id: 'btnSettings',
                 text: 'Settings',
                 font: fontMedium,
-                x: 155,
+                width: btnW,
+                height: btnH,
+                x: 320 - (btnStride) * 3,
                 y: 240 + buttonRowY,
                 onClick() {
                     app.pushState('settings');
@@ -56,13 +63,17 @@ export function createBooksView(app) {
                 id: 'btnControls',
                 text: 'Controls',
                 font: fontMedium,
-                x: 215,
+                width: btnW,
+                height: btnH,
+                x: 320 - (btnStride) * 2,
                 y: 240 + buttonRowY,
                 onClick() { app.pushState('controls'); }
             }),
             new Button({
-                x: 277,
+                x: 320 - (btnStride) * 1,
                 y: 240 + buttonRowY,
+                width: btnW,
+                height: btnH,
                 font: fontMedium,
                 text: 'Music',
                 onClick(){
