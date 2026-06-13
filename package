@@ -1,7 +1,14 @@
 #!/bin/sh
 
-cp DeltaAI.3dsx Dokusho.3dsx
+pushd ../Delta
+./delta-3ds -n Dokusho -a FManga -d "Ultimate LightNovel reader"
+popd
+
+cp ../Delta/build-3ds/DeltaAI.3dsx Dokusho.3dsx
+cp ../Delta/build/DeltaAI ./DeltaAI
+# cp -r ../Delta/data/utils ./data
 
 ./DeltaAI --main scripts/3dsx-inject.js Dokusho.3dsx --dir data
-
 ./DeltaAI --main scripts/3dsx-list.js Dokusho.3dsx
+
+3dslink -a 192.168.1.97 Dokusho.3dsx

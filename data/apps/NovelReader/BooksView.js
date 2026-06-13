@@ -10,6 +10,9 @@ const btnW = 37;
 const btnStride = btnW + 15;
 const btnH = 16;
 
+let _selectedBookIndex = 0;
+let _bookNcodes = [];
+
 export function createBooksView(app) {
     const booksView = new Group({
         id: "booksView",
@@ -91,14 +94,20 @@ export function createBooksView(app) {
     function updateBooksView() {
         const bookList = nodeMap.bookList;
         bookList.clearChildren();
+        _bookNcodes = Object.keys(app.model.books);
+        if (_selectedBookIndex >= _bookNcodes.length) {
+            _selectedBookIndex = Math.max(0, _bookNcodes.length - 1);
+        }
         let y = 10 - cardHeight - cardSpacing;
         for (let [ncode, book] of Object.entries(app.model.books)) {
-            bookList.addChild(createBookCardView(ncode, book, y += cardHeight + cardSpacing));
+            const idx = Object.keys(app.model.books).indexOf(ncode);
+            bookList.addChild(createBookCardView(ncode, book, y += cardHeight + cardSpacing, idx));
         }
         bookList.resizeSelf();
+        ensureSelectionVisible();
     }
 
-    function createBookCardView(ncode, book, y) {
+    function createBookCardView(ncode, book, y, index) {
         const hasMetadata = book.metadata && Object.keys(book.metadata).length > 0;
         const thumbPath = getThumbPath(ncode);
         const thumbnail = new Image(thumbPath); // thumbnail is null if it doesn't load
@@ -144,19 +153,24 @@ export function createBooksView(app) {
             }
         }));
 
-        return new Group({
+        const isSelected = index === _selectedBookIndex;
+        const card = new Group({
+            id: 'bookCard' + index,
             y,
             x: 7,
             width: 270,
             height: cardHeight,
-            backgroundColor: 0x22FFFFFF,
+            backgroundColor: isSelected ? palette.highlight & 0x33FFFFFF : 0x22FFFFFF,
             children,
             onClick() {
+                _selectedBookIndex = index;
+                updateCardColors();
                 console.log('Opening book:', ncode);
                 app.model.openBook(ncode);
                 app.pushState('reader');
             }
         });
+        return card;
     }
 
     function getThumbPath(ncode) {
@@ -170,13 +184,56 @@ export function createBooksView(app) {
     }
 }
 
+function updateCardColors() {
+    const bookList = nodeMap.bookList;
+    if (!bookList) return;
+    const children = bookList.children;
+    for (let i = 0; i < children.length; i++) {
+        const card = children[i];
+        const id = card.getAttr?.('id') || card.id;
+        const m = String(id).match(/^bookCard(\d+)$/);
+        if (!m) continue;
+        const idx = parseInt(m[1], 10);
+        card.backgroundColor = idx === _selectedBookIndex ? palette.highlight & 0x33FFFFFF : 0x22FFFFFF;
+    }
+}
+
+function ensureSelectionVisible() {
+    const bookList = nodeMap.bookList;
+    if (!bookList || _bookNcodes.length === 0) return;
+    const cardStrut = cardHeight + cardSpacing;
+    const listHeight = 200; // matches bookList height
+    const firstCardY = 10; // where cards start in updateBooksView
+    const cardY = firstCardY + _selectedBookIndex * cardStrut;
+    const scrollY = bookList.scrollY ?? 0;
+    if (cardY < scrollY) {
+        bookList.scrollY = cardY;
+    } else if (cardY + cardHeight > scrollY + listHeight) {
+        bookList.scrollY = cardY + cardHeight - listHeight;
+    }
+}
+
 export async function handleBooksKeyDown(app, event) {
     const { key } = event;
+    const totalBooks = Object.keys(app.model.books).length;
+    if (totalBooks === 0) return;
 
     switch (key) {
+    case 'ArrowUp':
+        _selectedBookIndex = Math.max(0, _selectedBookIndex - 1);
+        updateCardColors();
+        ensureSelectionVisible();
+        break;
+    case 'ArrowDown':
+        _selectedBookIndex = Math.min(totalBooks - 1, _selectedBookIndex + 1);
+        updateCardColors();
+        ensureSelectionVisible();
+        break;
     case 'a':
-        const { rndBG } = await import('./Shared.js');
-        rndBG(nodeMap.bg);
+        if (_bookNcodes[_selectedBookIndex]) {
+            app.model.openBook(_bookNcodes[_selectedBookIndex]);
+            app.pushState('reader');
+        }
         break;
     }
 }

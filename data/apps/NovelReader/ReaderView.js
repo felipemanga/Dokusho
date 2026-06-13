@@ -1,5 +1,5 @@
 import { nodeMap, Group, Label, Button, RichText } from '../../utils/gui/GUI.js';
-import { fontSmall, fontMedium, buttonRowY, palette, getTextFont, getTextFontSize, setTextFontSize, getAltMode } from './Shared.js';
+import { fontSmall, fontMedium, buttonRowY, palette, getTextFont, getAltMode } from './Shared.js';
 import { updateLlmView } from './LlmView.js';
 import { refreshImgGenPrompt } from './ImageGenView.js';
 
@@ -230,11 +230,19 @@ export async function handleReaderKeyDown(app, event) {
 
     switch (key) {
     case 'ArrowUp':
-        await model.prevLine();
+        if (getAltMode()) {
+            await model.prevChapter(false);
+        } else {
+            await model.prevLine();
+        }
         updateLineDisplay(app);
         break;
     case 'ArrowDown':
-        await model.nextLine();
+        if (getAltMode()) {
+            await model.nextChapter();
+        } else {
+            await model.nextLine();
+        }
         updateLineDisplay(app);
         break;
     case 'ArrowLeft':
@@ -244,38 +252,6 @@ export async function handleReaderKeyDown(app, event) {
     case 'ArrowRight':
         await model.nextWord();
         updateLineDisplay(app);
-        break;
-    case 'l':
-        if (getAltMode()) {
-            const newSize = Math.max(10, getTextFontSize() - 2);
-            setTextFontSize(newSize);
-            console.log('Font size decreased:', newSize);
-            if (nodeMap.activeLine) nodeMap.activeLine.attrs.font = getTextFont();
-            updateLineDisplay(app);
-        } else {
-            model.pageUp();
-        }
-        break;
-    case 'r':
-        if (getAltMode()) {
-            const newSize = Math.min(48, getTextFontSize() + 2);
-            setTextFontSize(newSize);
-            console.log('Font size increased:', newSize);
-            if (nodeMap.activeLine) nodeMap.activeLine.attrs.font = getTextFont();
-            updateLineDisplay(app);
-        } else {
-            model.pageDown();
-        }
-        break;
-    case 'ZLeft':
-        await model.prevChapter(false);
-        break;
-    case 'ZRight':
-        await model.nextChapter();
-        break;
-    case 'a':
-        const { rndBG } = await import('./Shared.js');
-        rndBG(nodeMap.bg);
         break;
     case 'b':
         app.popState();

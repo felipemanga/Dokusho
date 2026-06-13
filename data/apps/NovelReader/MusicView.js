@@ -1,13 +1,13 @@
 import { nodeMap, Group, Label, Button, RichText, ImageCtrl } from '../../utils/gui/GUI.js';
 import { fontSmall, fontMedium, fontLarge, buttonRowY, palette,
-    getMusicFolder, getMusicPlaylist, getMusicCurrentTrack, getMusicIsPlaying,
-    getMusicIsShuffled, getMusicIsRepeating,
-    setMusicPlaylist, setMusicCurrentTrack, setMusicIsPlaying,
-    setMusicIsShuffled, setMusicIsRepeating, updateMusicTrackOrder,
-    getNextTrackIndex, getPrevTrackIndex, getMusicFilePath,
-    getMusicSound, setMusicSound, getMusicTrackOrder,
-    saveNrSettings, getLlmEndpoint, getSdEndpoint, getBgPath, nrSettings,
-    getAltMode } from './Shared.js';
+         getMusicFolder, getMusicPlaylist, getMusicCurrentTrack, getMusicIsPlaying,
+         getMusicIsShuffled, getMusicIsRepeating,
+         setMusicPlaylist, setMusicCurrentTrack, setMusicIsPlaying,
+         setMusicIsShuffled, setMusicIsRepeating, updateMusicTrackOrder,
+         getNextTrackIndex, getPrevTrackIndex, getMusicFilePath,
+         getMusicSound, setMusicSound, getMusicTrackOrder,
+         saveNrSettings, getLlmEndpoint, getSdEndpoint, getBgPath, nrSettings,
+         getAltMode } from './Shared.js';
 
 // Icon size for transport buttons
 const iconSize = 32;
@@ -148,6 +148,7 @@ let _rowPool = []; // fixed pool of Labels
 let _selectionHighlight = null; // highlight box for cursor
 let _playingHighlight = null; // highlight box for currently playing track
 let _playbackPoller = null; // interval ID for checking sound end
+let _pausedPosition = 0; // saved position for pause/resume
 
 export function createMusicView(app) {
     // Top screen: track list
@@ -613,22 +614,23 @@ function playTrack(trackIndex) {
     // Stop current track if playing
     stopCurrentTrack();
 
-   setMusicCurrentTrack(trackIndex);
-        setMusicIsPlaying(true);
+    setMusicCurrentTrack(trackIndex);
+    setMusicIsPlaying(true);
+    updateSleepPrevention();
+
+    const filePath = getMusicFilePath(trackIndex);
+
+    try {
+        _pausedPosition = 0;
+        const sound = new Sound(filePath);
+        sound.play();
+        setMusicSound(sound);
+        startPlaybackPoller();
+    } catch (ex) {
+        console.error('Failed to play track:', ex);
+        setMusicIsPlaying(false);
         updateSleepPrevention();
-
-        const filePath = getMusicFilePath(trackIndex);
-
-        try {
-            const sound = new Sound(filePath);
-            sound.play();
-            setMusicSound(sound);
-            startPlaybackPoller();
-        } catch (ex) {
-            console.error('Failed to play track:', ex);
-            setMusicIsPlaying(false);
-            updateSleepPrevention();
-        }
+    }
 
     // Sync selection to the playing track
     const trackOrder = getMusicTrackOrder();
@@ -642,7 +644,7 @@ function playTrack(trackIndex) {
     updateTrackInfo();
 }
 
-function togglePlayPause() {
+export function togglePlayPause() {
     const playlist = getMusicPlaylist();
     if (playlist.length === 0) return;
 
@@ -653,8 +655,9 @@ function togglePlayPause() {
 
     // Selected track is the one currently playing: toggle pause/resume
     if (selectedTrack === currentTrack) {
-          if (isPlaying) {
+        if (isPlaying) {
             const sound = getMusicSound();
+            _pausedPosition = sound ? sound.position : 0;
             if (sound) sound.stop();
             setMusicIsPlaying(false);
             updateSleepPrevention();
@@ -667,6 +670,7 @@ function togglePlayPause() {
             try {
                 const sound = new Sound(filePath);
                 sound.play();
+                sound.position = _pausedPosition;
                 setMusicSound(sound);
                 startPlaybackPoller();
             } catch (ex) {
@@ -686,29 +690,29 @@ function togglePlayPause() {
 function stopMusic() {
     stopPlaybackPoller();
     stopCurrentTrack();
-  setMusicCurrentTrack(-1);
-        setMusicIsPlaying(false);
-        updateSleepPrevention();
-        renderVisibleRows();
+    setMusicCurrentTrack(-1);
+    setMusicIsPlaying(false);
+    updateSleepPrevention();
+    renderVisibleRows();
     updateTrackInfo();
 }
 
 function stopCurrentTrack() {
     const sound = getMusicSound();
     if (sound) {
-        sound.stop();
+        sound.dispose();
         setMusicSound(null);
     }
 }
 
-function nextTrack() {
+export function nextTrack() {
     const nextIdx = getNextTrackIndex();
     if (nextIdx >= 0) {
         playTrack(nextIdx);
     }
 }
 
-function prevTrack() {
+export function prevTrack() {
     const prevIdx = getPrevTrackIndex();
     if (prevIdx >= 0) {
         playTrack(prevIdx);
@@ -753,6 +757,8 @@ async function deleteSelectedTrack() {
         setMusicCurrentTrack(-1);
         setMusicIsPlaying(false);
         updateSleepPrevention();
+        // Yield a frame so the sound driver releases the file handle
+        await new Promise(r => setTimeout(r, 50));
     }
 
     try {
@@ -802,8 +808,7 @@ export async function handleMusicKeyDown(app, event) {
         scrollTrackList(getAltMode() ? visibleRowCount : 1);
         break;
     case 'a':
-        const { rndBG } = await import('./Shared.js');
-        rndBG(nodeMap.bg);
+        togglePlayPause();
         break;
     case 'b':
         toggleRepeat();
@@ -811,28 +816,23 @@ export async function handleMusicKeyDown(app, event) {
     case 'y':
         toggleShuffle();
         break;
-    case 'l':
-        prevTrack();
+    case 'ArrowLeft':
+        seekMusic(-0.1);
         break;
-    case 'r':
-        nextTrack();
-        break;
-    case 'ZLeft':
-        togglePlayPause();
-        break;
-    case 'ZRight':
-        stopMusic();
-        break;
-    case 'Select':
-        if (getMusicPlaylist().length > 0) {
-            const trackOrder = getMusicTrackOrder();
-            const selectedIdx = trackOrder[_selectedDisplayIdx];
-            if (selectedIdx >= 0) {
-                playTrack(selectedIdx);
-            }
-        }
+    case 'ArrowRight':
+        seekMusic(0.1);
         break;
     }
+}
+
+function seekMusic(fraction) {
+    const sound = getMusicSound();
+    if (!sound) return;
+    const frameCount = sound.frameCount;
+    if (!frameCount) return;
+    const seekAmount = Math.floor(frameCount * fraction);
+    const newPos = Math.max(0, Math.min(frameCount - 1, sound.position + seekAmount));
+    sound.position = newPos;
 }
 
 function scrollTrackList(delta) {

@@ -1,16 +1,17 @@
+import { nodeMap } from '../../utils/gui/GUI.js';
 import { handleReaderKeyDown } from './ReaderView.js';
 import { handleBooksKeyDown } from './BooksView.js';
 import { handleSettingsKeyDown } from './SettingsView.js';
 import { handleLlmKeyDown } from './LlmView.js';
 import { handleImageGenKeyDown } from './ImageGenView.js';
 import { handleControlsKeyDown } from './ControlsView.js';
-import { handleMusicKeyDown } from './MusicView.js';
-import { setAltMode, getAltMode } from './Shared.js';
+import { handleMusicKeyDown, togglePlayPause, prevTrack, nextTrack } from './MusicView.js';
+import { setAltMode, getAltMode, rndBG } from './Shared.js';
 
 export async function handleKeyUp(app, event) {
     const { key } = event;
     switch (key) {
-    case 'x':
+    case 'l':
         setAltMode(false);
         break;
     }
@@ -19,6 +20,7 @@ export async function handleKeyUp(app, event) {
 export async function handleKeyDown(app, event) {
     const { key } = event;
     try {
+        // State-specific handlers
         switch (app.state) {
         case 'reader':
             handleReaderKeyDown(app, event);
@@ -42,10 +44,12 @@ export async function handleKeyDown(app, event) {
             handleControlsKeyDown(app, event);
             break;
         }
+
+        // Global handlers (all states)
         switch (key) {
         case 'Select':
             if (getAltMode()) {
-                // X+Select: open music player
+                // L+Select: open music player
                 app.pushState('music');
             } else if (app.state === 'settings') {
                 app.popState();
@@ -53,8 +57,26 @@ export async function handleKeyDown(app, event) {
                 app.pushState('settings');
             }
             break;
-        case 'x':
+        case 'l':
             setAltMode(true);
+            break;
+        case 'x':
+            await rndBG(nodeMap.bg);
+            break;
+        case 'ZLeft':
+            if (getAltMode()) {
+                togglePlayPause();
+            }
+            break;
+        case 'ZRight':
+            if (getAltMode()) {
+                prevTrack();
+            }
+            break;
+        case 'r':
+            if (getAltMode()) {
+                nextTrack();
+            }
             break;
         }
     } catch (ex) {
