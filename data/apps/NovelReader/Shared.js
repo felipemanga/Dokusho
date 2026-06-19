@@ -160,24 +160,176 @@ export function setPalette(background, text, highlight) {
 }
 
 let altMode = false;
-export async function setBG(node, image) {
+
+// BG pan + zoom state
+const BG_VIEWPORT_W = 400;
+const BG_VIEWPORT_H = 240;
+export const BG_PAN_SPEED = 8;
+export const BG_ZOOM_STEP = 0.05;
+const BG_ZOOM_MAX = 4;
+let _bgPanOffsetX = 0;
+let _bgPanOffsetY = 0;
+let _bgImageWidth = 0;
+let _bgImageHeight = 0;
+let _bgBaseScale = 1;     // cover scale from setBG
+let _bgZoomLevel = 1;     // multiplier on top of base scale
+let _coverWidth = 0;      // image width at zoom=1 (cover scale)
+let _coverHeight = 0;     // image height at zoom=1 (cover scale)
+let _bgPanFrameId = 0;    // rAF id for continuous pan
+let _bgPanDir = { dx: 0, dy: 0, zoomIn: false, zoomOut: false };
+
+export function getBgPanOffsetX() { return _bgPanOffsetX; }
+export function getBgPanOffsetY() { return _bgPanOffsetY; }
+export function getBgImageWidth() { return _bgImageWidth; }
+export function getBgImageHeight() { return _bgImageHeight; }
+export function getBgZoomLevel() { return _bgZoomLevel; }
+
+// Minimum zoom that keeps both dimensions >= viewport.
+// At zoom z: scaledW = coverW * z, scaledH = coverH * z.
+// Need scaledW >= 400 AND scaledH >= 240.
+function getMinZoom() {
+    if (_coverWidth === 0 || _coverHeight === 0) return 1;
+    return Math.max(BG_VIEWPORT_W / _coverWidth, BG_VIEWPORT_H / _coverHeight);
+}
+
+// Re-apply current scale + zoom + pan to the BG node
+function applyBgTransform(ctrl) {
+    const node = ctrl.node;
+    const s = _bgBaseScale * _bgZoomLevel;
+    const img = node.image;
+    if (!img) return;
+    const sw = img.width * s;
+    const sh = img.height * s;
+    _bgImageWidth = sw;
+    _bgImageHeight = sh;
+    ctrl.width = sw;
+    ctrl.height = sh;
+    // Clamp pan: image must always cover viewport
+    const maxOffX = Math.max(0, (sw - BG_VIEWPORT_W) / 2);
+    const maxOffY = Math.max(0, (sh - BG_VIEWPORT_H) / 2);
+    _bgPanOffsetX = Math.max(-maxOffX, Math.min(maxOffX, _bgPanOffsetX));
+    _bgPanOffsetY = Math.max(-maxOffY, Math.min(maxOffY, _bgPanOffsetY));
+    ctrl.position = {
+        x: BG_VIEWPORT_W / 2 + _bgPanOffsetX,
+        y: BG_VIEWPORT_H / 2 + _bgPanOffsetY
+    };
+}
+
+// Zoom BG in/out. factor > 1 zooms in, < 1 zooms out.
+// Clamped so image always covers the full viewport.
+export function zoomBG(factor) {
+    const bg = nodeMap.bg;
+    if (!bg || !bg.node.image) return;
+    const minZoom = getMinZoom();
+    _bgZoomLevel = Math.max(minZoom, Math.min(BG_ZOOM_MAX, _bgZoomLevel * factor));
+    applyBgTransform(bg);
+}
+
+// Pan BG by dx/dy, clamped so image always covers viewport.
+export function panBG(dx, dy) {
+    const bg = nodeMap.bg;
+    if (!bg || !bg.node.image) return;
+
+    const maxOffX = Math.max(0, (_bgImageWidth - BG_VIEWPORT_W) / 2);
+    const maxOffY = Math.max(0, (_bgImageHeight - BG_VIEWPORT_H) / 2);
+    if (maxOffX === 0 && maxOffY === 0) return;
+
+    _bgPanOffsetX = Math.max(-maxOffX, Math.min(maxOffX, _bgPanOffsetX + dx));
+    _bgPanOffsetY = Math.max(-maxOffY, Math.min(maxOffY, _bgPanOffsetY + dy));
+
+    bg.node.position = {
+        x: BG_VIEWPORT_W / 2 + _bgPanOffsetX,
+        y: BG_VIEWPORT_H / 2 + _bgPanOffsetY
+    };
+}
+
+// Continuous pan/zoom loop driven by requestAnimationFrame.
+// Starts on stick keydown, stops on keyup.
+function bgPanTick() {
+    const { dx, dy, zoomIn, zoomOut } = _bgPanDir;
+    if (zoomIn) zoomBG(1 + BG_ZOOM_STEP);
+    if (zoomOut) zoomBG(1 - BG_ZOOM_STEP);
+    if (dx !== 0 || dy !== 0) {
+        panBG(dx, dy);
+    }
+    // Keep looping as long as there's active direction
+    if (_bgPanDir.dx !== 0 || _bgPanDir.dy !== 0 || _bgPanDir.zoomIn || _bgPanDir.zoomOut) {
+        _bgPanFrameId = requestAnimationFrame(bgPanTick);
+    } else {
+        _bgPanFrameId = 0;
+    }
+}
+
+export function startBgPan(dx, dy, zoomIn, zoomOut) {
+    if (dx !== 0) _bgPanDir.dx = dx;
+    if (dy !== 0) _bgPanDir.dy = dy;
+    if (zoomIn) _bgPanDir.zoomIn = true;
+    if (zoomOut) _bgPanDir.zoomOut = true;
+    if (_bgPanFrameId === 0) {
+        _bgPanFrameId = requestAnimationFrame(bgPanTick);
+    }
+}
+
+export function stopBgPan(direction) {
+    // direction: 'left' | 'right' | 'up' | 'down'
+    switch (direction) {
+        case 'right':  _bgPanDir.dx = Math.max(0, _bgPanDir.dx); break;
+        case 'left': _bgPanDir.dx = Math.min(0, _bgPanDir.dx); break;
+        case 'up':
+            _bgPanDir.zoomIn = false;
+            _bgPanDir.dy = Math.max(0, _bgPanDir.dy);
+            break;
+        case 'down':
+            _bgPanDir.zoomOut = false;
+            _bgPanDir.dy = Math.min(0, _bgPanDir.dy);
+            break;
+    }
+    // If nothing active, clear frame id (next tick will stop)
+    if (_bgPanDir.dx === 0 && _bgPanDir.dy === 0 && !_bgPanDir.zoomIn && !_bgPanDir.zoomOut) {
+        if (_bgPanFrameId) {
+            cancelAnimationFrame(_bgPanFrameId);
+            _bgPanFrameId = 0;
+        }
+    }
+    console.log('stop', direction, _bgPanDir);
+}
+
+// Reset pan dir on BG change
+function resetBgPanDir() {
+    _bgPanDir = { dx: 0, dy: 0, zoomIn: false, zoomOut: false };
+    if (_bgPanFrameId) {
+        cancelAnimationFrame(_bgPanFrameId);
+        _bgPanFrameId = 0;
+    }
+}
+
+export async function setBG(ctrl, image) {
     console.log('SetImage: ', !!image);
+    resetBgPanDir();
     if (!image) {
-        node.image = null;
+        ctrl.image = null;
+        _bgImageWidth = 0;
+        _bgImageHeight = 0;
+        _coverWidth = 0;
+        _coverHeight = 0;
+        _bgPanOffsetX = 0;
+        _bgPanOffsetY = 0;
+        _bgZoomLevel = 1;
+        _bgBaseScale = 1;
         return;
     }
-    node.image = image;
+    ctrl.image = image;
     const w = image.width;
     const h = image.height;
-    const s = Math.max(400 / w, 240 / h);
-    const sw = w * s;
-    const sh = h * s;
-    node.anchorX = 0.5;
-    node.anchorY = 0.5;
-    node.width = sw;
-    node.height = sh;
-    node.x = 400/2;
-    node.y = 240/2;
+    _bgBaseScale = Math.max(BG_VIEWPORT_W / w, BG_VIEWPORT_H / h);
+    _coverWidth = w * _bgBaseScale;
+    _coverHeight = h * _bgBaseScale;
+    _bgZoomLevel = 1;
+    _bgPanOffsetX = 0;
+    _bgPanOffsetY = 0;
+    ctrl.anchorX = 0.5;
+    ctrl.anchorY = 0.5;
+    applyBgTransform(ctrl);
 }
 
 export async function rndBG(node) {

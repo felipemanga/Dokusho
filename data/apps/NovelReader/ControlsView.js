@@ -55,6 +55,9 @@ export function createControlsView(app) {
         { key: 'L+ZL',       desc: 'Play / Pause music' },
         { key: 'L+ZR',       desc: 'Previous track' },
         { key: 'L+R',        desc: 'Next track' },
+        { key: 'Stick L/R',    desc: 'Pan background left/right' },
+        { key: 'Stick U/D',    desc: 'Pan background up/down' },
+        { key: 'L+Stick U/D',  desc: 'Zoom background in/out' },
         { section: ' ' },
     ];
 

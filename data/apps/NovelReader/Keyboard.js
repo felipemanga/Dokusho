@@ -6,13 +6,25 @@ import { handleLlmKeyDown } from './LlmView.js';
 import { handleImageGenKeyDown } from './ImageGenView.js';
 import { handleControlsKeyDown } from './ControlsView.js';
 import { handleMusicKeyDown, togglePlayPause, prevTrack, nextTrack } from './MusicView.js';
-import { setAltMode, getAltMode, rndBG } from './Shared.js';
+import { setAltMode, getAltMode, rndBG, startBgPan, stopBgPan, BG_PAN_SPEED } from './Shared.js';
 
 export async function handleKeyUp(app, event) {
     const { key } = event;
     switch (key) {
     case 'l':
         setAltMode(false);
+        break;
+    case 'StickLeft':
+        stopBgPan('left');
+        break;
+    case 'StickRight':
+        stopBgPan('right');
+        break;
+    case 'StickUp':
+        stopBgPan('up');
+        break;
+    case 'StickDown':
+        stopBgPan('down');
         break;
     }
 }
@@ -77,6 +89,21 @@ export async function handleKeyDown(app, event) {
             if (getAltMode()) {
                 nextTrack();
             }
+            break;
+        // BG pan/zoom via stick (continuous via rAF, all states)
+        case 'StickLeft':
+            startBgPan(BG_PAN_SPEED, 0, false, false);
+            break;
+        case 'StickRight':
+            startBgPan(-BG_PAN_SPEED, 0, false, false);
+            break;
+        case 'StickUp':
+            if (getAltMode()) startBgPan(0, 0, true, false);
+            else startBgPan(0, BG_PAN_SPEED, false, false);
+            break;
+        case 'StickDown':
+            if (getAltMode()) startBgPan(0, 0, false, true);
+            else startBgPan(0, -BG_PAN_SPEED, false, false);
             break;
         }
     } catch (ex) {
