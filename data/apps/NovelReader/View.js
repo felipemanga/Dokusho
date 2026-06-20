@@ -68,7 +68,7 @@ export async function NovelReaderView(app) {
     // Pass auto-translate mode to model
     app.model.autoTranslateMode = getAutoTranslateMode();
 
-    rndBG(nodeMap.bg);
+    rndBG();
 
     stamps.push(['bg', performance.now()]);
 

@@ -30,6 +30,7 @@ export function createControlsView(app) {
        { section: 'Music Player' },
         { key: 'A',          desc: 'Play / Pause' },
         { key: 'Y',          desc: 'Toggle shuffle' },
+        { key: 'L+Y',        desc: 'Toggle track list overlay' },
         { key: 'B',          desc: 'Toggle repeat' },
         { key: 'Arrow Up',   desc: 'Scroll track list up' },
         { key: 'Arrow Down', desc: 'Scroll track list down' },

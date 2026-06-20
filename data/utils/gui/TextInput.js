@@ -62,6 +62,7 @@ export class TextInput extends Ctrl {
         this.paddingX = this.getAttr('paddingX') ?? 4;
         this.#multiline = this.getAttr('multiline') ?? false;
         this.#paddingY = this.getAttr('paddingY') ?? (this.#multiline ? 4 : 0);
+        this.numericOnly = this.getAttr('numericOnly') ?? false;
         this.caretIndex = this.text.length;
 
         this.onChange = this.getAttr('onChange') ?? null;
@@ -74,7 +75,7 @@ export class TextInput extends Ctrl {
             this.#caretVisible = true;
             this.state = 'focus';
             this.#updateVisual();
-            this.root?.window?.showTextInput(this.text);
+            this.root?.window?.showTextInput(this.text, this.numericOnly);
         });
         this.addEventListener('keydown', (event) => this.#onKeyDown(event));
         this.addEventListener('wheel', (event) => this.#onWheel(event));
@@ -216,6 +217,9 @@ export class TextInput extends Ctrl {
         this.#paddingY = this.#multiline ? 4 : 0;
         this.#updateVisual();
     }
+
+    get numericOnly() {return this.getAttr('numericOnly');}
+    set numericOnly(value) {this.setAttr('numericOnly', !!value);}
 
     get paddingY() {return this.#paddingY;}
     set paddingY(value) {this.#paddingY = value || 0;}

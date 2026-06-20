@@ -4,7 +4,9 @@ import { fontSmall, fontMedium, fontLarge, buttonRowY, palettes, palette,
     getAutoTranslateMode, setAutoTranslateMode,
     getCurrentPaletteIndex,
     saveNrSettings, getLlmEndpoint, getSdEndpoint, getBgPath,
-    applyPalette, getMusicFolder, setMusicFolder } from './Shared.js';
+    applyPalette, getMusicFolder, setMusicFolder,
+    getMusicRandomBgOnEnd, setMusicRandomBgOnEnd,
+    getBgAutoRandomInterval, setBgAutoRandomInterval } from './Shared.js';
 import { nrSettings } from './Shared.js';
 
 export function createSettingsView(app) {
@@ -230,10 +232,67 @@ export function createSettingsView(app) {
             width: inputW,
             font: fontSmall,
             placeholder: 'Novels/music'
+        })
+    );
+
+    // Random Background on Music End
+    const randomBgRowY = musicRowY + rowH;
+    children.push(
+        new Label({
+            text: 'Random BG on end:',
+            x: 10,
+            y: randomBgRowY,
+            font: fontSmall,
+            color: palette.textDim
         }),
+        new Group({
+            id: 'randomBgBtn',
+            x: inputX,
+            y: randomBgRowY + 5,
+            width: 45,
+            height: rowH - 12,
+            backgroundColor: palette.contrast,
+            children: [
+                new Label({
+                    id: 'randomBgLabel',
+                    text: 'Off',
+                    x: 5,
+                    y: 3,
+                    width: 35,
+                    font: fontSmall,
+                    color: palette.textNormal,
+                    textAlign: 'center'
+                })
+            ],
+            onClick() {
+                const newVal = !getMusicRandomBgOnEnd();
+                setMusicRandomBgOnEnd(newVal);
+                updateRandomBgButton();
+            }
+        }),
+        new Label({
+            text: 'Auto random (s):',
+            x: 10,
+            y: randomBgRowY + rowH,
+            font: fontSmall,
+            color: palette.textDim
+        }),
+        new TextInput({
+            id: 'settingsBgAutoRandom',
+            floating: true,
+            numericOnly: true,
+            x: inputX,
+            y: randomBgRowY + rowH,
+            width: 60,
+            font: fontSmall,
+            placeholder: '0=off'
+        })
+    );
+
+    children.push(
         new Group({ // end spacer
             x: 0,
-            y: musicRowY + rowH,
+            y: randomBgRowY + rowH * 2,
             noFrame: true
         })
     );
@@ -275,8 +334,12 @@ export function createSettingsView(app) {
                     const bgVal = nodeMap.settingsBgPath.text;
                     const altBgVal = nodeMap.settingsAltBgPath.text;
                     const musicFolder = nodeMap.settingsMusicFolder.text;
+                    const autoRandomVal = nodeMap.settingsBgAutoRandom.text;
                     if (musicFolder) {
                         setMusicFolder(musicFolder);
+                    }
+                    if (autoRandomVal !== undefined) {
+                        setBgAutoRandomInterval(autoRandomVal);
                     }
                     app.model.autoTranslateMode = getAutoTranslateMode();
                     saveNrSettings(llmVal, sdVal, bgVal, altBgVal);
@@ -317,6 +380,16 @@ export function createSettingsView(app) {
             }
         }
     }
+
+    function updateRandomBgButton() {
+        const btn = nodeMap.randomBgBtn;
+        const label = nodeMap.randomBgLabel;
+        if (btn && label) {
+            const isOn = getMusicRandomBgOnEnd();
+            btn.backgroundColor = isOn ? palette.highlight & 0x33FFFFFF : palette.contrast;
+            label.text = isOn ? 'On' : 'Off';
+        }
+    }
 }
 
 export function refreshSettingsView(app) {
@@ -326,6 +399,7 @@ export function refreshSettingsView(app) {
     if (nodeMap.settingsAltBgPath) nodeMap.settingsAltBgPath.text = nrSettings.altBgPath || '';
     if (nodeMap.settingsFontSize) nodeMap.settingsFontSize.text = getTextFontSize() + 'px';
     if (nodeMap.settingsMusicFolder) nodeMap.settingsMusicFolder.text = getMusicFolder() || '';
+    if (nodeMap.settingsBgAutoRandom) nodeMap.settingsBgAutoRandom.text = getBgAutoRandomInterval().toString();
     // Sync auto translate buttons
     for (const mode of ['off', 'line', 'chapter']) {
         const btn = nodeMap['autoTransBtn' + mode];
@@ -335,6 +409,7 @@ export function refreshSettingsView(app) {
                 : palette.contrast;
         }
     }
+    updateRandomBgButton();
 }
 
 export async function handleSettingsKeyDown(app, event) {

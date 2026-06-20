@@ -6,7 +6,7 @@ import { handleLlmKeyDown } from './LlmView.js';
 import { handleImageGenKeyDown } from './ImageGenView.js';
 import { handleControlsKeyDown } from './ControlsView.js';
 import { handleMusicKeyDown, togglePlayPause, prevTrack, nextTrack } from './MusicView.js';
-import { setAltMode, getAltMode, rndBG, startBgPan, stopBgPan, BG_PAN_SPEED } from './Shared.js';
+import { setAltMode, getAltMode, updateAltBGMode, rndBG, startBgPan, stopBgPan, BG_PAN_SPEED } from './Shared.js';
 
 export async function handleKeyUp(app, event) {
     const { key } = event;
@@ -73,7 +73,8 @@ export async function handleKeyDown(app, event) {
             setAltMode(true);
             break;
         case 'x':
-            await rndBG(nodeMap.bg);
+            updateAltBGMode();
+            await rndBG();
             break;
         case 'ZLeft':
             if (getAltMode()) {

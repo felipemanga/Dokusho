@@ -1,12 +1,12 @@
 import { nodeMap, Group, Label, Button, RichText, ImageCtrl } from '../../utils/gui/GUI.js';
 import { fontSmall, fontMedium, fontLarge, buttonRowY, palette,
          getMusicFolder, getMusicPlaylist, getMusicCurrentTrack, getMusicIsPlaying,
-         getMusicIsShuffled, getMusicIsRepeating,
+         getMusicIsShuffled, getMusicIsRepeating, getMusicRandomBgOnEnd,
          setMusicPlaylist, setMusicCurrentTrack, setMusicIsPlaying,
-         setMusicIsShuffled, setMusicIsRepeating, updateMusicTrackOrder,
+         setMusicIsShuffled, setMusicIsRepeating, setMusicRandomBgOnEnd, updateMusicTrackOrder,
          getNextTrackIndex, getPrevTrackIndex, getMusicFilePath,
          getMusicSound, setMusicSound, getMusicTrackOrder,
-         saveNrSettings, getLlmEndpoint, getSdEndpoint, getBgPath, nrSettings,
+         saveNrSettings, getLlmEndpoint, getSdEndpoint, getBgPath, nrSettings, rndBG,
          getAltMode } from './Shared.js';
 
 // Icon size for transport buttons
@@ -580,7 +580,12 @@ function stopPlaybackPoller() {
 function onTrackEnded() {
     const isRepeating = getMusicIsRepeating();
     const isShuffled = getMusicIsShuffled();
+    const randomBgOnEnd = getMusicRandomBgOnEnd();
     const currentTrack = getMusicCurrentTrack();
+
+    if (randomBgOnEnd) {
+        rndBG();
+    }
 
     if (isRepeating) {
         // Replay the same track
@@ -814,7 +819,12 @@ export async function handleMusicKeyDown(app, event) {
         toggleRepeat();
         break;
     case 'y':
-        toggleShuffle();
+        if (getAltMode()) {
+            nodeMap.bg.node.opacity = nodeMap.trackList.visible ? 1 : 0.3;
+            nodeMap.trackList.visible = !nodeMap.trackList.visible;
+        } else {
+            toggleShuffle();
+        }
         break;
     case 'ArrowLeft':
         seekMusic(-0.1);

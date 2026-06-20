@@ -37,6 +37,8 @@ export let nrSettings = {
     musicVolume: 0.8,
     musicShuffle: false,
     musicRepeat: false,
+    musicRandomBgOnEnd: false,
+    bgAutoRandomInterval: 0,
     musicCurrentTrack: -1
 };
 
@@ -72,6 +74,10 @@ export async function loadNrSettings() {
     if (nrSettings.musicCurrentTrack != null) {
         _musicCurrentTrack = nrSettings.musicCurrentTrack;
     }
+    if (nrSettings.bgAutoRandomInterval != null) {
+        _bgAutoRandomInterval = nrSettings.bgAutoRandomInterval;
+        restartBgAutoRandomTimer();
+    }
     console.log('Loaded NovelReader settings:', nrSettings);
 }
 
@@ -100,6 +106,8 @@ export async function saveNrSettings(llmVal, sdVal, bgVal, altBgVal) {
     nrSettings.musicVolume = getMusicVolume();
     nrSettings.musicShuffle = getMusicIsShuffled();
     nrSettings.musicRepeat = getMusicIsRepeating();
+    nrSettings.musicRandomBgOnEnd = getMusicRandomBgOnEnd();
+    nrSettings.bgAutoRandomInterval = getBgAutoRandomInterval();
     nrSettings.musicCurrentTrack = getMusicCurrentTrack();
     try {
         await fs.writeFile(SettingsFile, JSON.stringify(nrSettings, null, 2));
@@ -160,6 +168,11 @@ export function setPalette(background, text, highlight) {
 }
 
 let altMode = false;
+let altBGMode = false;
+
+export function updateAltBGMode() {
+    altBGMode = altMode;
+}
 
 // BG pan + zoom state
 const BG_VIEWPORT_W = 400;
@@ -223,6 +236,7 @@ export function zoomBG(factor) {
     const minZoom = getMinZoom();
     _bgZoomLevel = Math.max(minZoom, Math.min(BG_ZOOM_MAX, _bgZoomLevel * factor));
     applyBgTransform(bg);
+    resetBgAutoRandomTimer();
 }
 
 // Pan BG by dx/dy, clamped so image always covers viewport.
@@ -241,6 +255,7 @@ export function panBG(dx, dy) {
         x: BG_VIEWPORT_W / 2 + _bgPanOffsetX,
         y: BG_VIEWPORT_H / 2 + _bgPanOffsetY
     };
+    resetBgAutoRandomTimer();
 }
 
 // Continuous pan/zoom loop driven by requestAnimationFrame.
@@ -330,11 +345,14 @@ export async function setBG(ctrl, image) {
     ctrl.anchorX = 0.5;
     ctrl.anchorY = 0.5;
     applyBgTransform(ctrl);
+    resetBgAutoRandomTimer();
 }
 
-export async function rndBG(node) {
+export async function rndBG() {
+    const ctrl = nodeMap.bg;
+    if (!ctrl) return;
     try {
-        const dir = altMode ? getAltBgPath() : getBgPath();
+        const dir = altBGMode ? getAltBgPath() : getBgPath();
         const SaveFolder = (settings.basePath == 'romfs:/' ? 'sdmc:/' : '') + dir;
         const files = (await fs.listDir(SaveFolder))
               .filter(e => e.isFile && /\.png$/i.test(e.name) && !/_thumb\./i.test(e.name))
@@ -342,7 +360,7 @@ export async function rndBG(node) {
         const pick = files[Math.random() * files.length | 0];
         if (!pick)
             return;
-        setBG(node, new Image(SaveFolder + '/' + pick));
+        setBG(ctrl, new Image(SaveFolder + '/' + pick));
     } catch (ex) {
         console.error(ex);
     }
@@ -396,6 +414,36 @@ export function setMusicIsShuffled(val) {
 
 export function setMusicIsRepeating(val) {
     _musicIsRepeating = val;
+}
+
+let _musicRandomBgOnEnd = nrSettings.musicRandomBgOnEnd || false;
+export function getMusicRandomBgOnEnd() { return _musicRandomBgOnEnd; }
+export function setMusicRandomBgOnEnd(val) { _musicRandomBgOnEnd = !!val; }
+
+let _bgAutoRandomInterval = nrSettings.bgAutoRandomInterval || 0;
+let _bgAutoRandomTimer = null;
+export function getBgAutoRandomInterval() { return _bgAutoRandomInterval; }
+export function setBgAutoRandomInterval(val) {
+    const newVal = Math.max(0, parseInt(val) || 0);
+    if (newVal !== _bgAutoRandomInterval) {
+        _bgAutoRandomInterval = newVal;
+        restartBgAutoRandomTimer();
+    }
+}
+export function resetBgAutoRandomTimer() {
+    if (_bgAutoRandomInterval > 0 && _bgAutoRandomTimer !== null) {
+        clearInterval(_bgAutoRandomTimer);
+        _bgAutoRandomTimer = setInterval(() => rndBG(), _bgAutoRandomInterval * 1000);
+    }
+}
+function restartBgAutoRandomTimer() {
+    if (_bgAutoRandomTimer !== null) {
+        clearInterval(_bgAutoRandomTimer);
+        _bgAutoRandomTimer = null;
+    }
+    if (_bgAutoRandomInterval > 0) {
+        _bgAutoRandomTimer = setInterval(() => rndBG(), _bgAutoRandomInterval * 1000);
+    }
 }
 
 export function setMusicSound(sound) {
@@ -475,7 +523,7 @@ export async function loadChapterBG(node, ncode, chapterIdx) {
     }
 
     // Fallback to random user-provided background
-    rndBG(node);
+    rndBG();
 }
 
 // Re-export for consumer convenience
