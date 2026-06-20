@@ -247,7 +247,8 @@ export function createImageGenView(app) {
                 cfgScale: 7.0,
                 seed: -1
             });
-            setBG(nodeMap.bg, image);
+            const imagePath = (settings.basePath == 'romfs:/' ? 'sdmc:/' : '') + getBgPath() + '/generated_' + Date.now() + '.png';
+            setBG(nodeMap.bg, image, imagePath);
             nodeMap.imgGenStatus.text = 'Done';
         } catch (ex) {
             console.error('Image generation failed:', ex);

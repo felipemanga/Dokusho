@@ -39,6 +39,7 @@ export let nrSettings = {
     musicRepeat: false,
     musicRandomBgOnEnd: false,
     bgAutoRandomInterval: 0,
+    bgPanZoomHistory: {},
     musicCurrentTrack: -1
 };
 
@@ -237,6 +238,14 @@ export function zoomBG(factor) {
     _bgZoomLevel = Math.max(minZoom, Math.min(BG_ZOOM_MAX, _bgZoomLevel * factor));
     applyBgTransform(bg);
     resetBgAutoRandomTimer();
+    if (_currentBgImagePath) {
+        nrSettings.bgPanZoomHistory[_currentBgImagePath] = {
+            panX: _bgPanOffsetX,
+            panY: _bgPanOffsetY,
+            zoom: _bgZoomLevel
+        };
+        scheduleBgPanZoomSave();
+    }
 }
 
 // Pan BG by dx/dy, clamped so image always covers viewport.
@@ -256,6 +265,14 @@ export function panBG(dx, dy) {
         y: BG_VIEWPORT_H / 2 + _bgPanOffsetY
     };
     resetBgAutoRandomTimer();
+    if (_currentBgImagePath) {
+        nrSettings.bgPanZoomHistory[_currentBgImagePath] = {
+            panX: _bgPanOffsetX,
+            panY: _bgPanOffsetY,
+            zoom: _bgZoomLevel
+        };
+        scheduleBgPanZoomSave();
+    }
 }
 
 // Continuous pan/zoom loop driven by requestAnimationFrame.
@@ -290,12 +307,12 @@ export function stopBgPan(direction) {
     switch (direction) {
         case 'right':  _bgPanDir.dx = Math.max(0, _bgPanDir.dx); break;
         case 'left': _bgPanDir.dx = Math.min(0, _bgPanDir.dx); break;
-        case 'up':
-            _bgPanDir.zoomIn = false;
-            _bgPanDir.dy = Math.max(0, _bgPanDir.dy);
-            break;
         case 'down':
             _bgPanDir.zoomOut = false;
+            _bgPanDir.dy = Math.max(0, _bgPanDir.dy);
+            break;
+        case 'up':
+            _bgPanDir.zoomIn = false;
             _bgPanDir.dy = Math.min(0, _bgPanDir.dy);
             break;
     }
@@ -318,7 +335,7 @@ function resetBgPanDir() {
     }
 }
 
-export async function setBG(ctrl, image) {
+export async function setBG(ctrl, image, imagePath = null) {
     console.log('SetImage: ', !!image);
     resetBgPanDir();
     if (!image) {
@@ -331,6 +348,7 @@ export async function setBG(ctrl, image) {
         _bgPanOffsetY = 0;
         _bgZoomLevel = 1;
         _bgBaseScale = 1;
+        _currentBgImagePath = null;
         return;
     }
     ctrl.image = image;
@@ -339,9 +357,19 @@ export async function setBG(ctrl, image) {
     _bgBaseScale = Math.max(BG_VIEWPORT_W / w, BG_VIEWPORT_H / h);
     _coverWidth = w * _bgBaseScale;
     _coverHeight = h * _bgBaseScale;
-    _bgZoomLevel = 1;
-    _bgPanOffsetX = 0;
-    _bgPanOffsetY = 0;
+    _currentBgImagePath = imagePath;
+    
+    const saved = imagePath && nrSettings.bgPanZoomHistory?.[imagePath];
+    if (saved) {
+        _bgZoomLevel = saved.zoom ?? 1;
+        _bgPanOffsetX = saved.panX ?? 0;
+        _bgPanOffsetY = saved.panY ?? 0;
+    } else {
+        _bgZoomLevel = 1;
+        _bgPanOffsetX = 0;
+        _bgPanOffsetY = 0;
+    }
+    
     ctrl.anchorX = 0.5;
     ctrl.anchorY = 0.5;
     applyBgTransform(ctrl);
@@ -360,7 +388,8 @@ export async function rndBG() {
         const pick = files[Math.random() * files.length | 0];
         if (!pick)
             return;
-        setBG(ctrl, new Image(SaveFolder + '/' + pick));
+        const imagePath = SaveFolder + '/' + pick;
+        setBG(ctrl, new Image(imagePath), imagePath);
     } catch (ex) {
         console.error(ex);
     }
@@ -446,6 +475,32 @@ function restartBgAutoRandomTimer() {
     }
 }
 
+let _currentBgImagePath = null;
+let _bgPanZoomSaveTimer = null;
+const BG_PANZOOM_SAVE_DELAY = 3000;
+
+function scheduleBgPanZoomSave() {
+    if (_bgPanZoomSaveTimer !== null) {
+        clearTimeout(_bgPanZoomSaveTimer);
+    }
+    _bgPanZoomSaveTimer = setTimeout(async () => {
+        _bgPanZoomSaveTimer = null;
+        await saveBgPanZoomHistory();
+    }, BG_PANZOOM_SAVE_DELAY);
+}
+
+async function saveBgPanZoomHistory() {
+    if (!_currentBgImagePath) return;
+    try {
+        await fs.writeFile(SettingsFile, JSON.stringify(nrSettings, null, 2));
+        console.log('Saved bgPanZoomHistory');
+    } catch (ex) {
+        console.error('Failed to save bgPanZoomHistory:', ex);
+    }
+}
+
+export function getCurrentBgImagePath() { return _currentBgImagePath; }
+
 export function setMusicSound(sound) {
     _musicSound = sound;
 }
@@ -514,7 +569,7 @@ export async function loadChapterBG(node, ncode, chapterIdx) {
         try {
             let image = new Image(fname);
             if (image) {
-                setBG(node, image);
+                setBG(node, image, fname);
                 return;
             }
         } catch (ex) {
